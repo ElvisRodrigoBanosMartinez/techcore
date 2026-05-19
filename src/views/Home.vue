@@ -1,26 +1,28 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useArticlesStore } from '@/stores/articles'
 
-const router = useRouter()
-const auth   = useAuthStore()
-const search = ref('')
+const router        = useRouter()
+const auth          = useAuthStore()
+const articlesStore = useArticlesStore()
+const search        = ref('')
 const activeCategory = ref('Todos')
-const sidebarOpen = ref(false)   // drawer móvil
-const mobileSearch = ref(false)  // barra de búsqueda móvil expandida
+const sidebarOpen   = ref(false)
+const mobileSearch  = ref(false)
 
-const articles = ref([
-  { id:'1', title:'Proceso de Onboarding',         category:'Incorporación', excerpt:'Guía paso a paso para la integración de nuevos colaboradores en la empresa.',                   author:'Ana García',    date:'2024-05-10', readTime:'5 min', tags:['onboarding','proceso'] },
-  { id:'2', title:'Política de Vacaciones 2024',    category:'Beneficios',    excerpt:'Reglas y procedimientos para la solicitud y aprobación de días de descanso.',                  author:'Carlos López',  date:'2024-04-22', readTime:'3 min', tags:['vacaciones','política'] },
-  { id:'3', title:'Evaluación de Desempeño',        category:'Desarrollo',    excerpt:'Marco de evaluación anual, criterios de calificación y proceso de retroalimentación.',         author:'María Torres',  date:'2024-03-15', readTime:'8 min', tags:['evaluación','KPIs'] },
-  { id:'4', title:'Protocolo de Trabajo Remoto',    category:'Operaciones',   excerpt:'Lineamientos para el trabajo desde casa: horarios, herramientas y comunicación efectiva.',   author:'Luis Martínez', date:'2024-02-28', readTime:'6 min', tags:['remoto','home office'] },
-  { id:'5', title:'Plan de Capacitación Q2',        category:'Desarrollo',    excerpt:'Cursos, talleres y certificaciones disponibles para el segundo trimestre del año.',            author:'Ana García',    date:'2024-01-30', readTime:'4 min', tags:['capacitación','formación'] },
-  { id:'6', title:'Código de Conducta Empresarial', category:'Cultura',       excerpt:'Valores, ética y comportamiento esperado de todos los integrantes del equipo.',                author:'RRHH',          date:'2023-12-01', readTime:'10 min', tags:['cultura','valores'] },
-  { id:'7', title:'Gestión del Clima Laboral',      category:'Cultura',       excerpt:'Encuestas, métricas y planes de acción para mantener un ambiente de trabajo positivo.',       author:'Ana García',    date:'2023-11-15', readTime:'7 min', tags:['clima','bienestar'] },
-  { id:'8', title:'Reclutamiento y Selección',      category:'Incorporación', excerpt:'Proceso estándar para la atracción, evaluación y contratación de nuevo talento.',             author:'María Torres',  date:'2023-10-20', readTime:'9 min', tags:['reclutamiento','talento'] },
-  { id:'9', title:'Compensaciones y Beneficios',    category:'Beneficios',    excerpt:'Estructura salarial, bonos, seguros y prestaciones adicionales de la empresa.',                author:'Carlos López',  date:'2023-09-05', readTime:'6 min', tags:['salario','compensación'] },
-])
+// ── Conectar a Firestore al montar el componente ──────────────────────────────
+let unsubscribe = null
+onMounted(() => {
+  unsubscribe = articlesStore.subscribeToArticles()
+})
+onUnmounted(() => {
+  articlesStore.unsubscribeFromArticles()
+})
+
+// Alias para el template
+const articles = computed(() => articlesStore.articles)
 
 const categoryMeta = {
   'Incorporación': { color:'#7c3aed', bg:'bg-violet-500/10 text-violet-400 border-violet-500/30', icon:'🚀' },
@@ -39,24 +41,35 @@ const filteredArticles = computed(() => {
   if (q) list = list.filter(a =>
     a.title.toLowerCase().includes(q) ||
     a.excerpt.toLowerCase().includes(q) ||
-    a.tags.some(t => t.includes(q))
+    a.tags?.some(t => t.includes(q))
   )
   return list
 })
 
 const stats = computed(() => [
-  { label:'Artículos',  value: articles.value.length,                           icon:'📄' },
-  { label:'Categorías', value: categories.value.length - 1,                     icon:'🗂️' },
-  { label:'Autores',    value: new Set(articles.value.map(a => a.author)).size, icon:'👥' },
+  { label:'Artículos',  value: articles.value.length,                                      icon:'📄' },
+  { label:'Categorías', value: categories.value.length - 1,                                icon:'🗂️' },
+  { label:'Autores',    value: new Set(articles.value.map(a => a.author?.displayName)).size, icon:'👥' },
 ])
 
+const categoryCounts = computed(() => {
+  const counts = {}
+  articles.value.forEach(a => {
+    counts[a.category] = (counts[a.category] || 0) + 1
+  })
+  return counts
+})
+
 function catMeta(cat) { return categoryMeta[cat] ?? { color:'#6b7280', bg:'bg-slate-500/10 text-slate-400 border-slate-500/30', icon:'📁' } }
-function catCount(cat) { return articles.value.filter(a => a.category === cat).length }
-function formatDate(d) { return new Date(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) }
+function formatDate(d) {
+  if (!d) return ''
+  const date = d.toDate ? d.toDate() : new Date(d)
+  return date.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
+}
 
 function selectCategory(cat) {
   activeCategory.value = cat
-  sidebarOpen.value = false  // cierra drawer al seleccionar en móvil
+  sidebarOpen.value = false
 }
 
 async function handleLogout() {
@@ -230,7 +243,7 @@ async function handleLogout() {
               <span
                 class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
                 :class="activeCategory === cat ? 'bg-violet-500/30 text-violet-300' : 'bg-white/[0.07] text-white/30'"
-              >{{ cat === 'Todos' ? articles.length : catCount(cat) }}</span>
+              >{{ cat === 'Todos' ? articles.length : (categoryCounts[cat] || 0) }}</span>
             </button>
           </nav>
 
@@ -263,7 +276,7 @@ async function handleLogout() {
             <span
               class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
               :class="activeCategory === cat ? 'bg-violet-500/30 text-violet-300' : 'bg-white/[0.07] text-white/30'"
-            >{{ cat === 'Todos' ? articles.length : catCount(cat) }}</span>
+            >{{ cat === 'Todos' ? articles.length : (categoryCounts[cat] || 0) }}</span>
           </button>
         </nav>
         <div class="mt-6 pt-5 border-t border-white/[0.06]">
@@ -319,8 +332,19 @@ async function handleLogout() {
             </div>
           </div>
 
+          <!-- Loading skeleton -->
+          <div v-if="articlesStore.loading" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+            <div v-for="n in 6" :key="n" class="h-52 rounded-xl bg-white/[0.04] border border-white/[0.06] animate-pulse"></div>
+          </div>
+
+          <!-- Error de Firestore -->
+          <div v-else-if="articlesStore.error" class="flex flex-col items-center py-20 gap-3">
+            <span class="text-4xl">⚠️</span>
+            <p class="text-red-400 text-sm">{{ articlesStore.error }}</p>
+          </div>
+
           <!-- Grid de artículos -->
-          <Transition name="fade" mode="out-in">
+          <Transition v-else name="fade" mode="out-in">
             <div v-if="filteredArticles.length" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               <article
                 v-for="article in filteredArticles"
@@ -352,11 +376,11 @@ async function handleLogout() {
                   <div class="flex items-center gap-1.5">
                     <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-none"
                       :style="{ background: `linear-gradient(135deg, ${catMeta(article.category).color}, #2563eb)` }">
-                      {{ article.author[0] }}
+                      {{ article.author?.displayName?.[0] ?? '?' }}
                     </div>
-                    <span class="text-[12px] text-white/45">{{ article.author }}</span>
+                    <span class="text-[12px] text-white/45">{{ article.author?.displayName }}</span>
                   </div>
-                  <span class="text-[11px] text-white/25">{{ formatDate(article.date) }}</span>
+                  <span class="text-[11px] text-white/25">{{ formatDate(article.createdAt) }}</span>
                 </div>
               </article>
             </div>
