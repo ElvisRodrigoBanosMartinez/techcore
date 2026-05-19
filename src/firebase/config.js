@@ -9,7 +9,7 @@ import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
-// ⚠️ SUSTITUYE ESTOS VALORES con los de tu proyecto Firebase
+
 const firebaseConfig = {
   apiKey: "AIzaSyDXIJrWoQix3ni2KyQx_dzO6wUK4DYxQlM",
   authDomain: "techcore-e0fbb.firebaseapp.com",
