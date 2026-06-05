@@ -22,6 +22,13 @@ export const useAuthStore = defineStore('auth', () => {
   // ── Getters ─────────────────────────────────────────────────────────────────
   const isAuthenticated = computed(() => !!user.value)
   const userDisplayName = computed(() => user.value?.email?.split('@')[0] ?? '')
+  const isAdmin = computed(() => {
+    if (!user.value?.email) return false
+    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
+    // Si la variable no está configurada, permitimos acceso temporal para desarrollo
+    if (adminEmails.length === 0) return true 
+    return adminEmails.includes(user.value.email)
+  })
 
   // ── Acciones ─────────────────────────────────────────────────────────────────
 
@@ -89,6 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
     // getters
     isAuthenticated,
     userDisplayName,
+    isAdmin,
     // acciones
     login,
     logout,

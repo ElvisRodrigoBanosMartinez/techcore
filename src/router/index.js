@@ -26,7 +26,7 @@ const routes = [
     path: '/articulo/nuevo',
     name: 'article-create',
     component: () => import('@/views/ArticleCreate.vue'),
-    meta: { requiresAuth: true }, // ruta protegida
+    meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
     path: '/articulo/:id',
@@ -40,7 +40,7 @@ const routes = [
     name: 'article-edit',
     component: () => import('@/views/ArticleEdit.vue'),
     props: true,
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresAdmin: true },
   },
   // Ruta catch-all → redirige a home
   {
@@ -84,6 +84,16 @@ router.beforeEach(async (to) => {
   // Ruta de invitado (ej. /login) y ya tiene sesión → Home
   if (to.meta.requiresGuest && isAuthenticated) {
     return { name: 'home' }
+  }
+
+  // Ruta requiere admin → validar email contra variables de entorno
+  if (to.meta.requiresAdmin) {
+    const email = auth.currentUser?.email
+    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
+    const isAdmin = adminEmails.length === 0 || adminEmails.includes(email)
+    if (!isAdmin) {
+      return { name: 'home' }
+    }
   }
 })
 

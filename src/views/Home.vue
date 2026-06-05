@@ -134,6 +134,7 @@ async function handleLogout() {
       <div class="flex items-center gap-1.5 sm:gap-2.5 flex-none">
         <!-- Botón Nuevo — texto en desktop, solo ícono en móvil -->
         <RouterLink
+          v-if="auth.isAdmin"
           to="/articulo/nuevo"
           id="btn-new-article"
           class="inline-flex items-center gap-1.5 px-2 sm:px-3.5 py-1.5 bg-gradient-to-r from-violet-600 to-blue-600 text-white text-sm font-semibold rounded-lg shadow-lg shadow-violet-900/40 hover:opacity-90 hover:-translate-y-px transition-all duration-150 no-underline"

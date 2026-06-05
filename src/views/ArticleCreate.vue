@@ -22,6 +22,30 @@ const tagPreview  = computed(() =>
   form.value.tags.split(',').map(t => t.trim()).filter(Boolean)
 )
 
+const fileInput = ref(null)
+const uploadingFile = ref(false)
+
+async function handleFileUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  
+  uploadingFile.value = true
+  try {
+    const url = await store.uploadFile(file)
+    const isImage = file.type.startsWith('image/')
+    const markdownSnippet = isImage 
+      ? `\n![${file.name}](${url})\n` 
+      : `\n[📄 Descargar ${file.name}](${url})\n`
+      
+    form.value.content += markdownSnippet
+  } catch (e) {
+    console.error(e)
+  } finally {
+    uploadingFile.value = false
+    event.target.value = '' // resetea el input
+  }
+}
+
 // ── Validación ────────────────────────────────────────────────────────────────
 function validate() {
   const e = {}
@@ -142,7 +166,22 @@ async function handleSubmit() {
 
         <!-- Contenido -->
         <div class="flex flex-col gap-1.5">
-          <label for="art-content" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Contenido *</label>
+          <div class="flex items-center justify-between">
+            <label for="art-content" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Contenido *</label>
+            
+            <button
+              type="button"
+              class="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 text-[12px] font-semibold rounded-lg transition-colors border border-violet-500/20"
+              @click="$refs.fileInput.click()"
+              :disabled="uploadingFile"
+            >
+              <svg v-if="uploadingFile" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+              <svg v-else class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M9.25 13.25a.75.75 0 001.5 0V4.636l2.955 3.129a.75.75 0 001.09-1.03l-4.25-4.5a.75.75 0 00-1.09 0l-4.25 4.5a.75.75 0 101.09 1.03l2.955-3.129v8.614z"/><path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z"/></svg>
+              {{ uploadingFile ? 'Subiendo...' : 'Adjuntar Archivo' }}
+            </button>
+            <input type="file" ref="fileInput" class="hidden" @change="handleFileUpload" />
+          </div>
+
           <textarea
             id="art-content"
             v-model="form.content"

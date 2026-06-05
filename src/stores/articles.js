@@ -9,7 +9,8 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   getDoc, query, orderBy, onSnapshot, serverTimestamp, limit
 } from 'firebase/firestore'
-import { db } from '@/firebase/config'
+import { db, storage } from '@/firebase/config'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { useAuthStore } from '@/stores/auth'
 
 const COLLECTION = 'articles'
@@ -131,9 +132,23 @@ export const useArticlesStore = defineStore('articles', () => {
     }
   }
 
+  // ── Subir archivo a Storage ───────────────────────────────────────────────────
+  async function uploadFile(file) {
+    error.value = null
+    try {
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, '_')
+      const fileRef = storageRef(storage, `articles/${Date.now()}_${cleanName}`)
+      await uploadBytes(fileRef, file)
+      return await getDownloadURL(fileRef)
+    } catch (e) {
+      error.value = 'Error al subir el archivo.'
+      throw e
+    }
+  }
+
   return {
     articles, loading, error, hasMore,
     subscribeToArticles, unsubscribeFromArticles, loadMore,
-    fetchArticle, createArticle, updateArticle, deleteArticle,
+    fetchArticle, createArticle, updateArticle, deleteArticle, uploadFile,
   }
 })

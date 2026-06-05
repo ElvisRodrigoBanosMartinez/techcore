@@ -19,10 +19,8 @@ const notFound   = ref(false)
 const deleting   = ref(false)
 const showDelete = ref(false)
 
-// Comprueba si el usuario actual es el autor del artículo
-const isOwner = computed(() =>
-  article.value && auth.user && article.value.author?.uid === auth.user.uid
-)
+// Comprueba si el usuario tiene permisos de edición (Administrador)
+const canEdit = computed(() => auth.isAdmin)
 
 function formatDate(ts) {
   if (!ts) return ''
@@ -30,11 +28,14 @@ function formatDate(ts) {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-// Renderiza Markdown de forma segura a HTML
+// Renderiza Markdown de forma segura a HTML (permite videos embebidos)
 const renderedContent = computed(() => {
   if (!article.value?.content) return ''
   const rawHtml = marked.parse(article.value.content)
-  return DOMPurify.sanitize(rawHtml)
+  return DOMPurify.sanitize(rawHtml, {
+    ADD_TAGS: ['iframe'],
+    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling']
+  })
 })
 
 onMounted(async () => {
@@ -137,8 +138,8 @@ async function confirmDelete() {
               </div>
             </div>
 
-            <!-- Acciones de propietario -->
-            <div v-if="isOwner" class="flex items-center gap-2">
+            <!-- Acciones de administración -->
+            <div v-if="canEdit" class="flex items-center gap-2">
               <RouterLink
                 :to="`/articulo/${id}/editar`"
                 class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.07] border border-white/10 text-white/60 text-sm font-medium rounded-lg hover:bg-white/[0.12] hover:text-white transition-colors no-underline"
