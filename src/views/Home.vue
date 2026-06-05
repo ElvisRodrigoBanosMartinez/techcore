@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useArticlesStore } from '@/stores/articles'
+import { CATEGORIES as APP_CATEGORIES, getCategoryMeta as catMeta } from '@/constants/categories'
 
 const router        = useRouter()
 const auth          = useAuthStore()
@@ -24,15 +25,7 @@ onUnmounted(() => {
 // Alias para el template
 const articles = computed(() => articlesStore.articles)
 
-const categoryMeta = {
-  'Incorporación': { color:'#7c3aed', bg:'bg-violet-500/10 text-violet-400 border-violet-500/30', icon:'🚀' },
-  'Beneficios':    { color:'#2563eb', bg:'bg-blue-500/10 text-blue-400 border-blue-500/30',       icon:'🎁' },
-  'Desarrollo':    { color:'#059669', bg:'bg-emerald-500/10 text-emerald-400 border-emerald-500/30', icon:'📈' },
-  'Operaciones':   { color:'#d97706', bg:'bg-amber-500/10 text-amber-400 border-amber-500/30',    icon:'⚙️' },
-  'Cultura':       { color:'#db2777', bg:'bg-pink-500/10 text-pink-400 border-pink-500/30',       icon:'🌟' },
-}
-
-const categories = computed(() => ['Todos', ...new Set(articles.value.map(a => a.category))])
+const categories = computed(() => ['Todos', ...APP_CATEGORIES])
 
 const filteredArticles = computed(() => {
   let list = articles.value
@@ -60,7 +53,6 @@ const categoryCounts = computed(() => {
   return counts
 })
 
-function catMeta(cat) { return categoryMeta[cat] ?? { color:'#6b7280', bg:'bg-slate-500/10 text-slate-400 border-slate-500/30', icon:'📁' } }
 function formatDate(d) {
   if (!d) return ''
   const date = d.toDate ? d.toDate() : new Date(d)

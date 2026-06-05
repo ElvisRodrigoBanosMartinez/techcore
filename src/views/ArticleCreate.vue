@@ -2,11 +2,10 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useArticlesStore } from '@/stores/articles'
+import { CATEGORIES } from '@/constants/categories'
 
 const router   = useRouter()
 const store    = useArticlesStore()
-
-const CATEGORIES = ['Incorporación', 'Beneficios', 'Desarrollo', 'Operaciones', 'Cultura']
 
 // ── Formulario ────────────────────────────────────────────────────────────────
 const form = ref({
