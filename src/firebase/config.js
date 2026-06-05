@@ -11,12 +11,12 @@ import { getStorage } from 'firebase/storage'
 
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDXIJrWoQix3ni2KyQx_dzO6wUK4DYxQlM",
-  authDomain: "techcore-e0fbb.firebaseapp.com",
-  projectId: "techcore-e0fbb",
-  storageBucket: "techcore-e0fbb.firebasestorage.app",
-  messagingSenderId: "1018208820692",
-  appId: "1:1018208820692:web:9e9b3c24895e32959c4a41"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 }
 
 // Inicializa la app de Firebase (singleton)

@@ -35,6 +35,13 @@ const routes = [
     props: true,
     meta: { requiresAuth: true },
   },
+  {
+    path: '/articulo/:id/editar',
+    name: 'article-edit',
+    component: () => import('@/views/ArticleEdit.vue'),
+    props: true,
+    meta: { requiresAuth: true },
+  },
   // Ruta catch-all → redirige a home
   {
     path: '/:pathMatch(.*)*',
