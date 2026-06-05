@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { useArticlesStore } from '@/stores/articles'
 import { useAuthStore } from '@/stores/auth'
 import { getCategoryMeta as catMeta } from '@/constants/categories'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const props = defineProps({ id: { type: String, required: true } })
 
@@ -28,10 +30,12 @@ function formatDate(ts) {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-// Convierte saltos de línea en párrafos simples para mostrar el contenido
-function paragraphs(text) {
-  return text?.split('\n').filter(p => p.trim()) ?? []
-}
+// Renderiza Markdown de forma segura a HTML
+const renderedContent = computed(() => {
+  if (!article.value?.content) return ''
+  const rawHtml = marked.parse(article.value.content)
+  return DOMPurify.sanitize(rawHtml)
+})
 
 onMounted(async () => {
   try {
@@ -161,13 +165,7 @@ async function confirmDelete() {
 
       <!-- Contenido -->
       <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        <div class="flex flex-col gap-4">
-          <p
-            v-for="(para, i) in paragraphs(article.content)"
-            :key="i"
-            class="text-white/70 text-base sm:text-[17px] leading-[1.85] tracking-[0.01em]"
-          >{{ para }}</p>
-        </div>
+        <div class="prose prose-invert prose-violet max-w-none text-white/80" v-html="renderedContent"></div>
 
         <!-- Tags -->
         <div v-if="article.tags?.length" class="mt-10 pt-6 border-t border-white/[0.06] flex flex-wrap gap-2">

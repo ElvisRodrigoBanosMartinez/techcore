@@ -150,7 +150,8 @@ async function handleSubmit() {
 
           <div class="flex flex-col gap-1.5">
             <label for="art-content" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Contenido *</label>
-            <textarea id="art-content" v-model="form.content" placeholder="Escribe el contenido completo del artículo aquí..." rows="10" class="w-full px-4 py-3 bg-white/[0.06] border rounded-xl text-white placeholder-white/25 text-sm outline-none resize-y transition-all leading-relaxed font-mono" :class="errors.content ? 'border-red-500/50 focus:ring-2 focus:ring-red-500/20' : 'border-white/10 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15'"></textarea>
+            <textarea id="art-content" v-model="form.content" placeholder="Escribe el contenido de tu artículo aquí. ¡Soporta Markdown (## Títulos, **negritas**, *cursivas*, - listas)!..." rows="10" class="w-full px-4 py-3 bg-white/[0.06] border rounded-xl text-white placeholder-white/25 text-sm outline-none resize-y transition-all leading-relaxed font-mono" :class="errors.content ? 'border-red-500/50 focus:ring-2 focus:ring-red-500/20' : 'border-white/10 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15'"></textarea>
+            <p class="text-xs text-white/35 mt-1">Soporta formato <a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" class="text-violet-400 hover:underline">Markdown</a>.</p>
             <span v-if="errors.content" class="text-red-400 text-xs">{{ errors.content }}</span>
           </div>
 
