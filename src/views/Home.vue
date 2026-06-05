@@ -388,6 +388,20 @@ async function handleLogout() {
               >Limpiar filtros</button>
             </div>
           </Transition>
+
+          <!-- Botón Cargar Más -->
+          <div v-if="filteredArticles.length > 0 && articlesStore.hasMore && !search" class="mt-8 flex justify-center">
+            <button
+              class="px-6 py-2.5 bg-white/[0.04] border border-white/10 text-white/70 text-sm font-semibold rounded-xl hover:bg-white/[0.08] hover:text-white transition-colors flex items-center gap-2"
+              @click="articlesStore.loadMore()"
+            >
+              <svg v-if="articlesStore.loading" class="w-4 h-4 animate-spin text-violet-500" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              Cargar más artículos
+            </button>
+          </div>
         </div>
       </main>
     </div>

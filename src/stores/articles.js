@@ -7,7 +7,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  getDoc, query, orderBy, onSnapshot, serverTimestamp,
+  getDoc, query, orderBy, onSnapshot, serverTimestamp, limit
 } from 'firebase/firestore'
 import { db } from '@/firebase/config'
 import { useAuthStore } from '@/stores/auth'
@@ -16,26 +16,35 @@ const COLLECTION = 'articles'
 
 export const useArticlesStore = defineStore('articles', () => {
   // ── Estado ───────────────────────────────────────────────────────────────────
-  const articles   = ref([])
-  const loading    = ref(false)
-  const error      = ref(null)
-  let   _unsub     = null   // función de limpieza del listener
+  const articles     = ref([])
+  const loading      = ref(false)
+  const error        = ref(null)
+  const currentLimit = ref(30)
+  const hasMore      = ref(true)
+  let   _unsub       = null   // función de limpieza del listener
 
   // ── Listener en tiempo real ───────────────────────────────────────────────────
   /**
-   * Suscribe a la colección ordenada por fecha descendente.
+   * Suscribe a la colección ordenada por fecha descendente con límite.
    * Retorna la función unsubscribe para llamar en onUnmounted.
    */
   function subscribeToArticles() {
     loading.value = true
     error.value   = null
 
-    const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'))
+    if (_unsub) _unsub() // limpiar listener previo si recargamos
+
+    const q = query(
+      collection(db, COLLECTION),
+      orderBy('createdAt', 'desc'),
+      limit(currentLimit.value)
+    )
 
     _unsub = onSnapshot(
       q,
       (snapshot) => {
         articles.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+        hasMore.value  = snapshot.docs.length === currentLimit.value
         loading.value  = false
       },
       (err) => {
@@ -46,6 +55,12 @@ export const useArticlesStore = defineStore('articles', () => {
     )
 
     return _unsub
+  }
+
+  function loadMore() {
+    if (!hasMore.value) return
+    currentLimit.value += 30
+    subscribeToArticles()
   }
 
   function unsubscribeFromArticles() {
@@ -117,8 +132,8 @@ export const useArticlesStore = defineStore('articles', () => {
   }
 
   return {
-    articles, loading, error,
-    subscribeToArticles, unsubscribeFromArticles,
+    articles, loading, error, hasMore,
+    subscribeToArticles, unsubscribeFromArticles, loadMore,
     fetchArticle, createArticle, updateArticle, deleteArticle,
   }
 })
