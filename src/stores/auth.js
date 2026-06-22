@@ -12,10 +12,11 @@ import {
   onAuthStateChanged,
   updatePassword,
   EmailAuthProvider,
-  reauthenticateWithCredential
+  reauthenticateWithCredential,
+  sendPasswordResetEmail
 } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
-import { auth, db } from '@/firebase/config'
+import { auth } from '@/firebase/config'
+import { checkAdmin } from '@/utils/checkAdmin'
 
 export const useAuthStore = defineStore('auth', () => {
   // ── Estado ──────────────────────────────────────────────────────────────────
@@ -95,22 +96,26 @@ export const useAuthStore = defineStore('auth', () => {
     return onAuthStateChanged(auth, async (firebaseUser) => {
       user.value = firebaseUser
       if (firebaseUser) {
-        const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
-        if (adminEmails.includes(firebaseUser.email) || adminEmails.length === 0) {
-          isAdmin.value = true
-        } else {
-          try {
-            const snap = await getDoc(doc(db, 'roles', firebaseUser.email))
-            isAdmin.value = snap.exists() && snap.data().isAdmin === true
-          } catch {
-            isAdmin.value = false
-          }
-        }
+        isAdmin.value = await checkAdmin(firebaseUser.email)
       } else {
         isAdmin.value = false
       }
       loading.value = false
     })
+  }
+
+  /**
+   * Envía un correo de restablecimiento de contraseña.
+   * @param {string} email
+   */
+  async function resetPassword(email) {
+    error.value = null
+    try {
+      await sendPasswordResetEmail(auth, email)
+    } catch (e) {
+      error.value = mapFirebaseError(e.code)
+      throw e
+    }
   }
 
   // ── Utilidades ───────────────────────────────────────────────────────────────
@@ -139,6 +144,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     changePassword,
+    resetPassword,
     initAuthListener,
   }
 })

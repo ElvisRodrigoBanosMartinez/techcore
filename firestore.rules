@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reglas de seguridad de Firestore para TechCore RRHH
+//
+// Principio: mínimo privilegio
+// - Todos los usuarios autenticados pueden LEER artículos y roles
+// - Solo administradores (definidos en la colección 'roles') pueden ESCRIBIR
+// - Nadie puede acceder sin autenticación
+// ─────────────────────────────────────────────────────────────────────────────
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper: verificar si el usuario es admin ──────────────────────────────
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/roles/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/roles/$(request.auth.token.email)).data.isAdmin == true;
+    }
+
+    // ── Artículos ─────────────────────────────────────────────────────────────
+    // Cualquier usuario autenticado puede leer.
+    // Solo admins pueden crear, editar o eliminar.
+    match /articles/{articleId} {
+      allow read:   if request.auth != null;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Roles ─────────────────────────────────────────────────────────────────
+    // Cualquier usuario autenticado puede leer (para verificar su propio rol).
+    // Solo admins pueden modificar roles.
+    match /roles/{email} {
+      allow read:   if request.auth != null;
+      allow write:  if isAdmin();
+    }
+
+    // ── Denegar todo lo demás ─────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

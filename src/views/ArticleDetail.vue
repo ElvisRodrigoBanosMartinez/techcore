@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getCategoryMeta as catMeta } from '@/constants/categories'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import AppHeader from '@/components/AppHeader.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 
@@ -29,12 +30,34 @@ function formatDate(ts) {
 }
 
 // Renderiza Markdown de forma segura a HTML (permite videos embebidos)
+// Dominios de confianza para embeds de video
+const TRUSTED_IFRAME_HOSTS = [
+  'www.youtube.com',
+  'youtube.com',
+  'www.youtube-nocookie.com',
+  'player.vimeo.com',
+]
+
+// Hook de DOMPurify: elimina iframes cuyo src no sea de un dominio de confianza
+DOMPurify.addHook('uponSanitizeElement', (node) => {
+  if (node.tagName === 'IFRAME') {
+    try {
+      const src = new URL(node.getAttribute('src') || '')
+      if (!TRUSTED_IFRAME_HOSTS.includes(src.hostname)) {
+        node.remove()
+      }
+    } catch {
+      node.remove() // URL inválida → eliminar
+    }
+  }
+})
+
 const renderedContent = computed(() => {
   if (!article.value?.content) return ''
   const rawHtml = marked.parse(article.value.content)
   return DOMPurify.sanitize(rawHtml, {
     ADD_TAGS: ['iframe'],
-    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling']
+    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'src']
   })
 })
 
@@ -63,27 +86,7 @@ async function confirmDelete() {
 <template>
   <div class="min-h-[100dvh] bg-[#0a0a12] text-slate-200 font-sans">
 
-    <!-- Navbar compacta -->
-    <header class="sticky top-0 z-50 flex items-center gap-3 px-4 sm:px-6 h-14 bg-[#0a0a12]/95 backdrop-blur-xl border-b border-white/[0.07]">
-      <button
-        class="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm font-medium"
-        @click="router.push('/')"
-      >
-        <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd"/>
-        </svg>
-        Volver
-      </button>
-      <div class="flex-1"></div>
-      <RouterLink to="/" class="flex items-center gap-2 flex-none no-underline cursor-pointer hover:opacity-90 transition-opacity">
-        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center">
-          <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-          </svg>
-        </div>
-        <span class="text-sm font-bold text-white">TechCore</span>
-      </RouterLink>
-    </header>
+    <AppHeader back-label="Volver" back-to="/" />
 
     <!-- ── Loading ── -->
     <div v-if="loading" class="flex items-center justify-center py-40">

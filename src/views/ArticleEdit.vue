@@ -3,6 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useArticlesStore } from '@/stores/articles'
 import { CATEGORIES } from '@/constants/categories'
+import AppHeader from '@/components/AppHeader.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -100,27 +102,7 @@ async function handleSubmit() {
 
 <template>
   <div class="min-h-[100dvh] bg-[#0a0a12] text-slate-200 font-sans">
-    <!-- Navbar compacta -->
-    <header class="sticky top-0 z-50 flex items-center gap-3 px-4 sm:px-6 h-14 bg-[#0a0a12]/95 backdrop-blur-xl border-b border-white/[0.07]">
-      <button
-        class="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm font-medium"
-        @click="router.push(`/articulo/${id}`)"
-      >
-        <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd"/>
-        </svg>
-        Cancelar
-      </button>
-      <div class="flex-1"></div>
-      <RouterLink to="/" class="flex items-center gap-2 flex-none no-underline cursor-pointer hover:opacity-90 transition-opacity">
-        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center">
-          <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-          </svg>
-        </div>
-        <span class="text-sm font-bold text-white">TechCore <span class="text-[10px] font-extrabold tracking-widest bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">RRHH</span></span>
-      </RouterLink>
-    </header>
+    <AppHeader back-label="Cancelar" :back-to="`/articulo/${id}`" />
 
     <!-- Contenido -->
     <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -174,25 +156,14 @@ async function handleSubmit() {
             <span v-if="errors.excerpt" class="text-red-400 text-xs">{{ errors.excerpt }}</span>
           </div>
 
-          <div class="flex flex-col gap-1.5">
-            <div class="flex items-center justify-between">
-              <label for="art-content" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Contenido *</label>
-              <button
-                type="button"
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 text-[12px] font-semibold rounded-lg transition-colors border border-violet-500/20"
-                @click="$refs.fileInput.click()"
-                :disabled="uploadingFile"
-              >
-                <svg v-if="uploadingFile" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-                <svg v-else class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M9.25 13.25a.75.75 0 001.5 0V4.636l2.955 3.129a.75.75 0 001.09-1.03l-4.25-4.5a.75.75 0 00-1.09 0l-4.25 4.5a.75.75 0 101.09 1.03l2.955-3.129v8.614z"/><path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z"/></svg>
-                {{ uploadingFile ? 'Subiendo...' : 'Adjuntar Archivo' }}
-              </button>
-              <input type="file" ref="fileInput" class="hidden" @change="handleFileUpload" />
-            </div>
-            <textarea id="art-content" v-model="form.content" placeholder="Escribe el contenido de tu artículo aquí. ¡Soporta Markdown (## Títulos, **negritas**, *cursivas*, - listas)!..." rows="10" class="w-full px-4 py-3 bg-white/[0.06] border rounded-xl text-white placeholder-white/25 text-sm outline-none resize-y transition-all leading-relaxed font-mono" :class="errors.content ? 'border-red-500/50 focus:ring-2 focus:ring-red-500/20' : 'border-white/10 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15'"></textarea>
-            <p class="text-xs text-white/35 mt-1">Soporta formato <a href="https://www.markdownguide.org/cheat-sheet/" target="_blank" class="text-violet-400 hover:underline">Markdown</a>.</p>
-            <span v-if="errors.content" class="text-red-400 text-xs">{{ errors.content }}</span>
-          </div>
+          <MarkdownEditor
+            v-model="form.content"
+            placeholder="Escribe el contenido de tu artículo aquí. ¡Soporta Markdown (## Títulos, **negritas**, *cursivas*, - listas)!..."
+            :error="errors.content"
+            :uploading-file="uploadingFile"
+            @upload-file="$refs.fileInput.click()"
+          />
+          <input type="file" ref="fileInput" class="hidden" @change="handleFileUpload" />
 
           <div class="flex flex-col gap-1.5">
             <label for="art-tags" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Etiquetas <span class="normal-case font-normal">(separadas por coma)</span></label>

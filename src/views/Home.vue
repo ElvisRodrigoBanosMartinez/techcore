@@ -1,9 +1,14 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useArticlesStore } from '@/stores/articles'
 import { CATEGORIES as APP_CATEGORIES, getCategoryMeta as catMeta } from '@/constants/categories'
+
+// Componentes extraídos
+import SidebarCategories from '@/components/SidebarCategories.vue'
+import ArticleCard from '@/components/ArticleCard.vue'
+import PasswordModal from '@/components/PasswordModal.vue'
 
 const router        = useRouter()
 const auth          = useAuthStore()
@@ -15,52 +20,68 @@ const mobileSearch  = ref(false)
 const userMenuOpen  = ref(false)
 
 // ── Conectar a Firestore al montar el componente ──────────────────────────────
-let unsubscribe = null
 onMounted(() => {
-  unsubscribe = articlesStore.subscribeToArticles()
+  articlesStore.subscribeToArticles()
+  window.addEventListener('keydown', handleKeydown)
 })
 onUnmounted(() => {
   articlesStore.unsubscribeFromArticles()
+  window.removeEventListener('keydown', handleKeydown)
 })
+
+// ── Atajo de teclado ⌘K / Ctrl+K para buscar ─────────────────────────────────
+function handleKeydown(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault()
+    document.getElementById('search-input')?.focus()
+  }
+}
 
 // Alias para el template
 const articles = computed(() => articlesStore.articles)
-
 const categories = computed(() => ['Todos', ...APP_CATEGORIES])
 
 // ── Modal de Contraseña ───────────────────────────────────────────────────────
 const showPasswordModal = ref(false)
-const oldPassword = ref('')
-const newPassword = ref('')
-const passwordError = ref('')
-const passwordSuccess = ref(false)
 
-async function handleChangePassword() {
-  passwordError.value = ''
-  passwordSuccess.value = false
-  if (newPassword.value.length < 6) {
-    passwordError.value = 'La contraseña nueva debe tener al menos 6 caracteres.'
-    return
-  }
-  try {
-    await auth.changePassword(oldPassword.value, newPassword.value)
-    passwordSuccess.value = true
-    oldPassword.value = ''
-    newPassword.value = ''
-    setTimeout(() => { showPasswordModal.value = false; passwordSuccess.value = false }, 2000)
-  } catch (e) {
-    passwordError.value = auth.error || 'Error al actualizar la contraseña.'
-  }
+// ── Búsqueda mejorada ─────────────────────────────────────────────────────────
+// Normaliza texto: quita acentos y pasa a minúsculas para búsqueda fuzzy en español
+function normalize(str) {
+  return str?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') ?? ''
 }
 
+const searchResults = ref(null) // null = usar articles, array = resultados de búsqueda global
+
+// Cuando el usuario escribe, buscar en TODOS los artículos si hay más por cargar
+const searchDebounce = ref(null)
+watch(search, (q) => {
+  clearTimeout(searchDebounce.value)
+  if (!q.trim()) {
+    searchResults.value = null
+    return
+  }
+  searchDebounce.value = setTimeout(async () => {
+    if (articlesStore.hasMore) {
+      // Hay artículos no cargados → buscar en todos
+      const allArticles = await articlesStore.searchAllArticles()
+      searchResults.value = allArticles
+    } else {
+      searchResults.value = null // todos ya están cargados
+    }
+  }, 300)
+})
+
 const filteredArticles = computed(() => {
-  let list = articles.value
+  const source = searchResults.value ?? articles.value
+  let list = source
   if (activeCategory.value !== 'Todos') list = list.filter(a => a.category === activeCategory.value)
-  const q = search.value.toLowerCase().trim()
+  const q = normalize(search.value.trim())
   if (q) list = list.filter(a =>
-    a.title.toLowerCase().includes(q) ||
-    a.excerpt.toLowerCase().includes(q) ||
-    a.tags?.some(t => t.includes(q))
+    normalize(a.title).includes(q) ||
+    normalize(a.excerpt).includes(q) ||
+    a.tags?.some(t => normalize(t).includes(q)) ||
+    normalize(a.category).includes(q) ||
+    normalize(a.author?.displayName).includes(q)
   )
   return list
 })
@@ -78,12 +99,6 @@ const categoryCounts = computed(() => {
   })
   return counts
 })
-
-function formatDate(d) {
-  if (!d) return ''
-  const date = d.toDate ? d.toDate() : new Date(d)
-  return date.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })
-}
 
 function selectCategory(cat) {
   activeCategory.value = cat
@@ -169,7 +184,7 @@ async function handleLogout() {
           <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
         </RouterLink>
 
-        <!-- Botón Nuevo — texto en desktop, solo ícono en móvil -->
+        <!-- Botón Nuevo -->
         <RouterLink
           v-if="auth.isAdmin"
           to="/articulo/nuevo"
@@ -264,7 +279,7 @@ async function handleLogout() {
         ></div>
       </Transition>
 
-      <!-- ── Sidebar ── -->
+      <!-- ── Sidebar móvil (drawer) ── -->
       <Transition
         enter-active-class="transition-transform duration-200 ease-out"
         enter-from-class="-translate-x-full"
@@ -273,77 +288,37 @@ async function handleLogout() {
       >
         <aside
           v-show="sidebarOpen"
-          class="fixed lg:static top-0 left-0 h-full lg:h-auto w-64 lg:w-52 flex-none border-r border-white/[0.06] bg-[#0e0e1c] lg:bg-white/[0.015] flex flex-col py-5 px-3 overflow-y-auto z-50 lg:z-auto lg:translate-x-0"
+          class="fixed lg:hidden top-0 left-0 h-full w-64 flex-none border-r border-white/[0.06] bg-[#0e0e1c] flex flex-col py-5 px-3 overflow-y-auto z-50"
         >
-          <!-- Cabecera del drawer (solo móvil) -->
-          <div class="lg:hidden flex items-center justify-between px-2 mb-4">
+          <!-- Cabecera del drawer -->
+          <div class="flex items-center justify-between px-2 mb-4">
             <span class="text-sm font-semibold text-white">Menú</span>
             <button class="w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:bg-white/[0.07]" @click="sidebarOpen = false">
               <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
             </button>
           </div>
 
-          <p class="text-[10px] font-bold uppercase tracking-widest text-white/25 px-2 mb-2">Categorías</p>
-
-          <nav class="flex flex-col gap-0.5">
-            <button
-              v-for="cat in categories"
-              :key="cat"
-              class="flex items-center gap-2.5 px-2.5 py-2.5 lg:py-2 rounded-lg text-sm font-medium text-left w-full transition-colors"
-              :class="activeCategory === cat
-                ? 'bg-violet-600/20 text-violet-300'
-                : 'text-white/45 hover:bg-white/[0.06] hover:text-white/80'"
-              @click="selectCategory(cat)"
-            >
-              <span class="text-base leading-none">{{ cat === 'Todos' ? '🏠' : catMeta(cat).icon }}</span>
-              <span class="flex-1 truncate">{{ cat }}</span>
-              <span
-                class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
-                :class="activeCategory === cat ? 'bg-violet-500/30 text-violet-300' : 'bg-white/[0.07] text-white/30'"
-              >{{ cat === 'Todos' ? articles.length : (categoryCounts[cat] || 0) }}</span>
-            </button>
-          </nav>
-
-          <div class="mt-6 pt-5 border-t border-white/[0.06]">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-white/25 px-2 mb-3">Resumen</p>
-            <div v-for="s in stats" :key="s.label" class="flex items-center gap-2.5 px-2 py-2 rounded-lg">
-              <span class="text-base leading-none">{{ s.icon }}</span>
-              <span class="flex-1 text-[13px] text-white/40">{{ s.label }}</span>
-              <span class="text-sm font-bold text-white/65">{{ s.value }}</span>
-            </div>
-          </div>
+          <SidebarCategories
+            :categories="categories"
+            :active-category="activeCategory"
+            :articles="articles"
+            :category-counts="categoryCounts"
+            :stats="stats"
+            @select="selectCategory"
+          />
         </aside>
       </Transition>
 
-      <!-- Sidebar estático desktop (siempre visible en lg+) -->
+      <!-- ── Sidebar desktop (siempre visible en lg+) ── -->
       <aside class="hidden lg:flex flex-none w-52 border-r border-white/[0.06] bg-white/[0.015] flex-col py-5 px-3 overflow-y-auto">
-        <p class="text-[10px] font-bold uppercase tracking-widest text-white/25 px-2 mb-2">Categorías</p>
-        <nav class="flex flex-col gap-0.5">
-          <button
-            v-for="cat in categories"
-            :key="cat"
-            class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium text-left w-full transition-colors"
-            :class="activeCategory === cat
-              ? 'bg-violet-600/20 text-violet-300'
-              : 'text-white/45 hover:bg-white/[0.06] hover:text-white/80'"
-            @click="activeCategory = cat"
-          >
-            <span class="text-base leading-none">{{ cat === 'Todos' ? '🏠' : catMeta(cat).icon }}</span>
-            <span class="flex-1 truncate">{{ cat }}</span>
-            <span
-              class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
-              :class="activeCategory === cat ? 'bg-violet-500/30 text-violet-300' : 'bg-white/[0.07] text-white/30'"
-            >{{ cat === 'Todos' ? articles.length : (categoryCounts[cat] || 0) }}</span>
-          </button>
-        </nav>
-        <div class="mt-6 pt-5 border-t border-white/[0.06]">
-          <p class="text-[10px] font-bold uppercase tracking-widest text-white/25 px-2 mb-3">Resumen</p>
-          <div v-for="s in stats" :key="s.label" class="flex items-center gap-2.5 px-2 py-2 rounded-lg">
-            <span class="text-base leading-none">{{ s.icon }}</span>
-            <span class="flex-1 text-[13px] text-white/40">{{ s.label }}</span>
-            <span class="text-sm font-bold text-white/65">{{ s.value }}</span>
-          </div>
-        </div>
+        <SidebarCategories
+          :categories="categories"
+          :active-category="activeCategory"
+          :articles="articles"
+          :category-counts="categoryCounts"
+          :stats="stats"
+          @select="selectCategory"
+        />
       </aside>
 
       <!-- ── Main content ── -->
@@ -403,43 +378,11 @@ async function handleLogout() {
           <!-- Grid de artículos -->
           <Transition v-else name="fade" mode="out-in">
             <div v-if="filteredArticles.length" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-              <article
+              <ArticleCard
                 v-for="article in filteredArticles"
                 :key="article.id"
-                class="group relative flex flex-col gap-3 p-4 sm:p-5 bg-white/[0.035] border border-white/[0.07] rounded-xl cursor-pointer overflow-hidden transition-all duration-200 hover:border-violet-500/35 hover:bg-white/[0.055] hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/30 active:scale-[0.99]"
-                @click="router.push(`/articulo/${article.id}`)"
-              >
-                <div class="absolute bottom-0 left-0 right-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  :style="{ background: `linear-gradient(90deg, ${catMeta(article.category).color}, transparent)` }">
-                </div>
-
-                <div class="flex items-center justify-between">
-                  <span class="text-[11px] font-bold border rounded-full px-2 py-0.5" :class="catMeta(article.category).bg">
-                    {{ catMeta(article.category).icon }} {{ article.category }}
-                  </span>
-                  <span class="text-[11px] text-white/30">{{ article.readTime }}</span>
-                </div>
-
-                <h2 class="text-[15px] sm:text-base font-semibold text-white leading-snug">{{ article.title }}</h2>
-                <p class="text-[13px] text-white/45 leading-relaxed line-clamp-2">{{ article.excerpt }}</p>
-
-                <div class="flex flex-wrap gap-1">
-                  <span v-for="tag in article.tags" :key="tag" class="text-[11px] text-white/28 bg-white/[0.05] px-1.5 py-0.5 rounded">
-                    #{{ tag }}
-                  </span>
-                </div>
-
-                <div class="flex items-center justify-between mt-auto pt-3 border-t border-white/[0.06]">
-                  <div class="flex items-center gap-1.5">
-                    <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-none"
-                      :style="{ background: `linear-gradient(135deg, ${catMeta(article.category).color}, #2563eb)` }">
-                      {{ article.author?.displayName?.[0] ?? '?' }}
-                    </div>
-                    <span class="text-[12px] text-white/45">{{ article.author?.displayName }}</span>
-                  </div>
-                  <span class="text-[11px] text-white/25">{{ formatDate(article.createdAt) }}</span>
-                </div>
-              </article>
+                :article="article"
+              />
             </div>
 
             <div v-else class="flex flex-col items-center justify-center py-20 gap-3">
@@ -472,27 +415,7 @@ async function handleLogout() {
     </div>
 
     <!-- Modal Cambiar Contraseña -->
-    <div v-if="showPasswordModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div class="bg-[#12121e] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-        <h3 class="text-xl font-semibold text-white mb-4">Cambiar Contraseña</h3>
-        <form @submit.prevent="handleChangePassword" class="flex flex-col gap-4">
-          <div>
-            <label class="block text-xs uppercase text-white/50 mb-1">Contraseña Actual</label>
-            <input v-model="oldPassword" type="password" class="w-full px-3 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-white outline-none focus:border-violet-500" required placeholder="Ingresa tu contraseña actual">
-          </div>
-          <div>
-            <label class="block text-xs uppercase text-white/50 mb-1">Nueva Contraseña</label>
-            <input v-model="newPassword" type="password" class="w-full px-3 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-white outline-none focus:border-violet-500" minlength="6" required placeholder="Mínimo 6 caracteres">
-          </div>
-          <div v-if="passwordError" class="text-red-400 text-[13px] bg-red-500/10 p-2 rounded">{{ passwordError }}</div>
-          <div v-if="passwordSuccess" class="text-green-400 text-[13px] bg-green-500/10 p-2 rounded">Contraseña actualizada con éxito.</div>
-          <div class="flex gap-3 mt-2">
-            <button type="button" @click="showPasswordModal = false" class="flex-1 px-4 py-2 bg-white/[0.05] hover:bg-white/[0.1] text-white/70 rounded-lg transition-colors">Cancelar</button>
-            <button type="submit" class="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors font-medium">Guardar</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <PasswordModal :visible="showPasswordModal" @close="showPasswordModal = false" />
   </div>
 </template>
 

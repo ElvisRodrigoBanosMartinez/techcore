@@ -6,20 +6,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createRouter, createWebHistory } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
-import { auth, db } from '@/firebase/config'
-
-async function checkAdmin(email) {
-  if (!email) return false
-  const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
-  if (adminEmails.length === 0 || adminEmails.includes(email)) return true
-  try {
-    const snap = await getDoc(doc(db, 'roles', email))
-    return snap.exists() && snap.data().isAdmin === true
-  } catch {
-    return false
-  }
-}
+import { auth } from '@/firebase/config'
+import { checkAdmin } from '@/utils/checkAdmin'
 
 // ── Definición de rutas ───────────────────────────────────────────────────────
 const routes = [

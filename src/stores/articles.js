@@ -7,7 +7,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  getDoc, query, orderBy, onSnapshot, serverTimestamp, limit
+  getDoc, getDocs, query, orderBy, onSnapshot, serverTimestamp, limit
 } from 'firebase/firestore'
 import { db } from '@/firebase/config'
 import { useAuthStore } from '@/stores/auth'
@@ -46,6 +46,7 @@ export const useArticlesStore = defineStore('articles', () => {
         articles.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
         hasMore.value  = snapshot.docs.length === currentLimit.value
         loading.value  = false
+        _invalidateSearchCache() // invalidar caché de búsqueda cuando cambian datos
       },
       (err) => {
         error.value   = 'Error al cargar los artículos.'
@@ -67,6 +68,35 @@ export const useArticlesStore = defineStore('articles', () => {
     if (_unsub) { _unsub(); _unsub = null }
   }
 
+  // ── Búsqueda full-text local ───────────────────────────────────────────────
+  // Para un sistema interno de RRHH (<1000 artículos), descargamos todos
+  // y filtramos en el cliente cuando el usuario busca.
+  const allArticlesCache = ref([])
+  const searchLoading    = ref(false)
+
+  async function searchAllArticles() {
+    // Si ya tenemos todo cacheado, no recargar
+    if (allArticlesCache.value.length > 0) return allArticlesCache.value
+
+    searchLoading.value = true
+    try {
+      const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'))
+      const snapshot = await getDocs(q)
+      allArticlesCache.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+      return allArticlesCache.value
+    } catch (err) {
+      console.error('[articles store] search error', err)
+      return articles.value // fallback a lo ya cargado
+    } finally {
+      searchLoading.value = false
+    }
+  }
+
+  // Invalidar caché cuando cambian los artículos via snapshot
+  function _invalidateSearchCache() {
+    allArticlesCache.value = []
+  }
+
   // ── Obtener un artículo por ID ────────────────────────────────────────────────
   async function fetchArticle(id) {
     error.value = null
@@ -85,12 +115,17 @@ export const useArticlesStore = defineStore('articles', () => {
     const auth = useAuthStore()
     error.value = null
     try {
-      const ref = await addDoc(collection(db, COLLECTION), {
+      // Calcular tiempo de lectura estimado
+      const wordCount = payload.content.trim().split(/\s+/).length
+      const readTime = `${Math.max(1, Math.ceil(wordCount / 200))} min lectura`
+
+      const docRef = await addDoc(collection(db, COLLECTION), {
         title:     payload.title.trim(),
         excerpt:   payload.excerpt.trim(),
         content:   payload.content.trim(),
         category:  payload.category,
         tags:      payload.tags.map(t => t.trim().toLowerCase()).filter(Boolean),
+        readTime,
         author: {
           uid:         auth.user.uid,
           displayName: auth.user.displayName || auth.user.email.split('@')[0],
@@ -98,7 +133,7 @@ export const useArticlesStore = defineStore('articles', () => {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
-      return ref.id
+      return docRef.id
     } catch (e) {
       error.value = 'No se pudo guardar el artículo.'
       throw e
@@ -109,11 +144,17 @@ export const useArticlesStore = defineStore('articles', () => {
   async function updateArticle(id, payload) {
     error.value = null
     try {
-      await updateDoc(doc(db, COLLECTION, id), {
+      // Recalcular tiempo de lectura si se actualizó el contenido
+      const updates = {
         ...payload,
         tags:      payload.tags?.map(t => t.trim().toLowerCase()).filter(Boolean),
         updatedAt: serverTimestamp(),
-      })
+      }
+      if (payload.content) {
+        const wordCount = payload.content.trim().split(/\s+/).length
+        updates.readTime = `${Math.max(1, Math.ceil(wordCount / 200))} min lectura`
+      }
+      await updateDoc(doc(db, COLLECTION, id), updates)
     } catch (e) {
       error.value = 'No se pudo actualizar el artículo.'
       throw e
@@ -135,9 +176,11 @@ export const useArticlesStore = defineStore('articles', () => {
   async function uploadFile(file) {
     error.value = null
     try {
-      // Usamos variables de entorno con fallback a tus llaves
-      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'doh0g7sax'
-      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'techcore_files'
+      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
+      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
+      if (!cloudName || !uploadPreset) {
+        throw new Error('Cloudinary no está configurado. Verifica las variables de entorno.')
+      }
       
       const formData = new FormData()
       formData.append('file', file)
@@ -164,8 +207,9 @@ export const useArticlesStore = defineStore('articles', () => {
   }
 
   return {
-    articles, loading, error, hasMore,
+    articles, loading, error, hasMore, searchLoading,
     subscribeToArticles, unsubscribeFromArticles, loadMore,
+    searchAllArticles,
     fetchArticle, createArticle, updateArticle, deleteArticle, uploadFile,
   }
 })
