@@ -9,8 +9,7 @@ import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   getDoc, query, orderBy, onSnapshot, serverTimestamp, limit
 } from 'firebase/firestore'
-import { db, storage } from '@/firebase/config'
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db } from '@/firebase/config'
 import { useAuthStore } from '@/stores/auth'
 
 const COLLECTION = 'articles'
@@ -132,16 +131,34 @@ export const useArticlesStore = defineStore('articles', () => {
     }
   }
 
-  // ── Subir archivo a Storage ───────────────────────────────────────────────────
+  // ── Subir archivo a Cloudinary ────────────────────────────────────────────────
   async function uploadFile(file) {
     error.value = null
     try {
-      const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, '_')
-      const fileRef = storageRef(storage, `articles/${Date.now()}_${cleanName}`)
-      await uploadBytes(fileRef, file)
-      return await getDownloadURL(fileRef)
+      // Usamos variables de entorno con fallback a tus llaves
+      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'doh0g7sax'
+      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'techcore_files'
+      
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('upload_preset', uploadPreset)
+
+      // Si es imagen lo mandamos a 'image', si es documento (PDF, etc) a 'raw'
+      // Esto evita que Cloudinary intente procesar el PDF y dé error al intentar verlo.
+      const resourceType = file.type.startsWith('image/') ? 'image' : 'raw'
+
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
+        method: 'POST',
+        body: formData
+      })
+      
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error?.message || 'Error de Cloudinary')
+      
+      return data.secure_url // Devuelve la URL pública del archivo
     } catch (e) {
       error.value = 'Error al subir el archivo.'
+      console.error('[Cloudinary Error]', e)
       throw e
     }
   }

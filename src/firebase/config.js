@@ -21,10 +21,14 @@ const firebaseConfig = {
 
 // Inicializa la app de Firebase (singleton)
 const app = initializeApp(firebaseConfig)
+const auth = getAuth(app)
+const db = getFirestore(app)
+const storage = getStorage(app)
 
-// Exporta los servicios que usaremos en toda la aplicación
-export const auth = getAuth(app)
-export const db = getFirestore(app)
-export const storage = getStorage(app)
+// App secundaria para creación silenciosa de usuarios
+const secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp')
+const secondaryAuth = getAuth(secondaryApp)
+
+export { app, auth, db, storage, secondaryAuth }
 
 export default app

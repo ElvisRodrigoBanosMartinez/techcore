@@ -10,8 +10,12 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential
 } from 'firebase/auth'
-import { auth } from '@/firebase/config'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '@/firebase/config'
 
 export const useAuthStore = defineStore('auth', () => {
   // ── Estado ──────────────────────────────────────────────────────────────────
@@ -22,13 +26,7 @@ export const useAuthStore = defineStore('auth', () => {
   // ── Getters ─────────────────────────────────────────────────────────────────
   const isAuthenticated = computed(() => !!user.value)
   const userDisplayName = computed(() => user.value?.email?.split('@')[0] ?? '')
-  const isAdmin = computed(() => {
-    if (!user.value?.email) return false
-    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
-    // Si la variable no está configurada, permitimos acceso temporal para desarrollo
-    if (adminEmails.length === 0) return true 
-    return adminEmails.includes(user.value.email)
-  })
+  const isAdmin = ref(false)
 
   // ── Acciones ─────────────────────────────────────────────────────────────────
 
@@ -64,13 +62,53 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Cambia la contraseña del usuario actual pidiendo la antigua por seguridad.
+   */
+  async function changePassword(oldPassword, newPassword) {
+    error.value = null
+    try {
+      const currentUser = auth.currentUser
+      if (!currentUser || !currentUser.email) throw new Error('No hay usuario activo.')
+      
+      // 1. Reautenticar (Validar contraseña actual)
+      const credential = EmailAuthProvider.credential(currentUser.email, oldPassword)
+      await reauthenticateWithCredential(currentUser, credential)
+
+      // 2. Actualizar contraseña
+      await updatePassword(currentUser, newPassword)
+    } catch (e) {
+      if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password') {
+        error.value = 'La contraseña actual es incorrecta.'
+      } else {
+        error.value = mapFirebaseError(e.code)
+      }
+      throw e
+    }
+  }
+
+  /**
    * Suscribe al listener de Firebase para mantener el estado sincronizado.
    * Llámalo una sola vez en App.vue o main.js.
    * Retorna la función de limpieza (unsubscribe) para evitar memory leaks.
    */
   function initAuthListener() {
-    return onAuthStateChanged(auth, (firebaseUser) => {
+    return onAuthStateChanged(auth, async (firebaseUser) => {
       user.value = firebaseUser
+      if (firebaseUser) {
+        const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
+        if (adminEmails.includes(firebaseUser.email) || adminEmails.length === 0) {
+          isAdmin.value = true
+        } else {
+          try {
+            const snap = await getDoc(doc(db, 'roles', firebaseUser.email))
+            isAdmin.value = snap.exists() && snap.data().isAdmin === true
+          } catch {
+            isAdmin.value = false
+          }
+        }
+      } else {
+        isAdmin.value = false
+      }
       loading.value = false
     })
   }
@@ -100,6 +138,7 @@ export const useAuthStore = defineStore('auth', () => {
     // acciones
     login,
     logout,
+    changePassword,
     initAuthListener,
   }
 })

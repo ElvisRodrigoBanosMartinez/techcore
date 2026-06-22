@@ -6,7 +6,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createRouter, createWebHistory } from 'vue-router'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/firebase/config'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '@/firebase/config'
+
+async function checkAdmin(email) {
+  if (!email) return false
+  const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
+  if (adminEmails.length === 0 || adminEmails.includes(email)) return true
+  try {
+    const snap = await getDoc(doc(db, 'roles', email))
+    return snap.exists() && snap.data().isAdmin === true
+  } catch {
+    return false
+  }
+}
 
 // ── Definición de rutas ───────────────────────────────────────────────────────
 const routes = [
@@ -40,6 +53,12 @@ const routes = [
     name: 'article-edit',
     component: () => import('@/views/ArticleEdit.vue'),
     props: true,
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin',
+    name: 'admin',
+    component: () => import('@/views/AdminPanel.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   // Ruta catch-all → redirige a home
@@ -86,11 +105,10 @@ router.beforeEach(async (to) => {
     return { name: 'home' }
   }
 
-  // Ruta requiere admin → validar email contra variables de entorno
+  // Ruta requiere admin → consultar base de datos
   if (to.meta.requiresAdmin) {
     const email = auth.currentUser?.email
-    const adminEmails = import.meta.env.VITE_ADMIN_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
-    const isAdmin = adminEmails.length === 0 || adminEmails.includes(email)
+    const isAdmin = await checkAdmin(email)
     if (!isAdmin) {
       return { name: 'home' }
     }

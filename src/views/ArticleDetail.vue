@@ -75,12 +75,14 @@ async function confirmDelete() {
         Volver
       </button>
       <div class="flex-1"></div>
-      <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center">
-        <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-      </div>
-      <span class="text-sm font-bold text-white">TechCore</span>
+      <RouterLink to="/" class="flex items-center gap-2 flex-none no-underline cursor-pointer hover:opacity-90 transition-opacity">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center">
+          <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <span class="text-sm font-bold text-white">TechCore</span>
+      </RouterLink>
     </header>
 
     <!-- ── Loading ── -->

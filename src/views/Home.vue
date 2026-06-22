@@ -12,6 +12,7 @@ const search        = ref('')
 const activeCategory = ref('Todos')
 const sidebarOpen   = ref(false)
 const mobileSearch  = ref(false)
+const userMenuOpen  = ref(false)
 
 // ── Conectar a Firestore al montar el componente ──────────────────────────────
 let unsubscribe = null
@@ -26,6 +27,31 @@ onUnmounted(() => {
 const articles = computed(() => articlesStore.articles)
 
 const categories = computed(() => ['Todos', ...APP_CATEGORIES])
+
+// ── Modal de Contraseña ───────────────────────────────────────────────────────
+const showPasswordModal = ref(false)
+const oldPassword = ref('')
+const newPassword = ref('')
+const passwordError = ref('')
+const passwordSuccess = ref(false)
+
+async function handleChangePassword() {
+  passwordError.value = ''
+  passwordSuccess.value = false
+  if (newPassword.value.length < 6) {
+    passwordError.value = 'La contraseña nueva debe tener al menos 6 caracteres.'
+    return
+  }
+  try {
+    await auth.changePassword(oldPassword.value, newPassword.value)
+    passwordSuccess.value = true
+    oldPassword.value = ''
+    newPassword.value = ''
+    setTimeout(() => { showPasswordModal.value = false; passwordSuccess.value = false }, 2000)
+  } catch (e) {
+    passwordError.value = auth.error || 'Error al actualizar la contraseña.'
+  }
+}
 
 const filteredArticles = computed(() => {
   let list = articles.value
@@ -89,7 +115,7 @@ async function handleLogout() {
       </button>
 
       <!-- Brand -->
-      <div class="flex items-center gap-2 flex-none">
+      <RouterLink to="/" @click="search = ''; activeCategory = 'Todos'" class="flex items-center gap-2 flex-none no-underline cursor-pointer hover:opacity-90 transition-opacity">
         <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center shadow-lg shadow-violet-900/40">
           <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
@@ -98,7 +124,7 @@ async function handleLogout() {
         <span class="text-sm sm:text-base font-bold text-white">TechCore
           <span class="hidden sm:inline text-[10px] font-extrabold tracking-widest bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent ml-1">RRHH</span>
         </span>
-      </div>
+      </RouterLink>
 
       <!-- Search — desktop siempre visible, móvil oculto por defecto -->
       <div class="hidden sm:flex flex-1 max-w-lg mx-auto relative">
@@ -132,6 +158,17 @@ async function handleLogout() {
 
       <!-- Actions -->
       <div class="flex items-center gap-1.5 sm:gap-2.5 flex-none">
+        <!-- Botón Panel Admin -->
+        <RouterLink
+          v-if="auth.isAdmin"
+          to="/admin"
+          class="inline-flex items-center justify-center p-1.5 sm:px-3 sm:py-1.5 bg-white/[0.04] border border-white/10 text-white/70 text-sm font-semibold rounded-lg hover:bg-white/[0.08] hover:text-white transition-all duration-150 no-underline"
+          title="Panel de Administración"
+        >
+          <span class="hidden sm:inline">Panel Admin</span>
+          <svg class="w-4 h-4 sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        </RouterLink>
+
         <!-- Botón Nuevo — texto en desktop, solo ícono en móvil -->
         <RouterLink
           v-if="auth.isAdmin"
@@ -143,18 +180,45 @@ async function handleLogout() {
           <span class="hidden sm:inline">Nuevo Artículo</span>
         </RouterLink>
 
-        <!-- Avatar usuario -->
-        <button
-          id="btn-user-menu"
-          class="flex items-center gap-1.5 sm:gap-2 pl-1 sm:pr-3 py-1 bg-white/[0.05] border border-white/[0.09] rounded-full hover:bg-white/[0.09] transition-colors cursor-pointer"
-          @click="handleLogout"
-          title="Cerrar sesión"
-        >
-          <div class="w-6 h-6 rounded-full bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center text-[11px] font-bold text-white flex-none">
-            {{ auth.userDisplayName[0]?.toUpperCase() }}
-          </div>
-          <span class="hidden sm:inline text-[13px] font-medium text-white/70 pr-2">{{ auth.userDisplayName }}</span>
-        </button>
+        <!-- Avatar usuario (Dropdown) -->
+        <div class="relative flex items-center border-l border-white/10 pl-3 sm:pl-4">
+          <button
+            id="btn-user-menu"
+            class="relative z-50 flex items-center gap-1.5 sm:gap-2 pl-1 sm:pr-3 py-1 bg-white/[0.05] border border-white/[0.09] rounded-full hover:bg-white/[0.09] transition-colors cursor-pointer"
+            @click="userMenuOpen = !userMenuOpen"
+            title="Abrir menú de usuario"
+          >
+            <div class="w-6 h-6 rounded-full bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center text-[11px] font-bold text-white flex-none">
+              {{ auth.userDisplayName[0]?.toUpperCase() }}
+            </div>
+            <span class="hidden sm:inline text-[13px] font-medium text-white/70">{{ auth.userDisplayName }}</span>
+            <svg class="w-3.5 h-3.5 text-white/50 hidden sm:block pr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+
+          <!-- Dropdown Menu -->
+          <Transition
+            enter-active-class="transition ease-out duration-100"
+            enter-from-class="transform opacity-0 scale-95"
+            enter-to-class="transform opacity-100 scale-100"
+            leave-active-class="transition ease-in duration-75"
+            leave-from-class="transform opacity-100 scale-100"
+            leave-to-class="transform opacity-0 scale-95"
+          >
+            <div v-if="userMenuOpen" class="absolute right-0 top-full mt-2 w-48 bg-[#12121e] border border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
+              <button
+                @click="showPasswordModal = true; userMenuOpen = false"
+                class="w-full text-left px-4 py-2.5 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors"
+              >Cambiar contraseña</button>
+              <button
+                @click="handleLogout"
+                class="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.06] hover:text-red-300 transition-colors border-t border-white/5"
+              >Cerrar sesión</button>
+            </div>
+          </Transition>
+
+          <!-- Overlay para cerrar el menú al dar clic afuera -->
+          <div v-if="userMenuOpen" @click="userMenuOpen = false" class="fixed inset-0 z-40"></div>
+        </div>
       </div>
     </header>
 
@@ -405,6 +469,29 @@ async function handleLogout() {
           </div>
         </div>
       </main>
+    </div>
+
+    <!-- Modal Cambiar Contraseña -->
+    <div v-if="showPasswordModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div class="bg-[#12121e] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <h3 class="text-xl font-semibold text-white mb-4">Cambiar Contraseña</h3>
+        <form @submit.prevent="handleChangePassword" class="flex flex-col gap-4">
+          <div>
+            <label class="block text-xs uppercase text-white/50 mb-1">Contraseña Actual</label>
+            <input v-model="oldPassword" type="password" class="w-full px-3 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-white outline-none focus:border-violet-500" required placeholder="Ingresa tu contraseña actual">
+          </div>
+          <div>
+            <label class="block text-xs uppercase text-white/50 mb-1">Nueva Contraseña</label>
+            <input v-model="newPassword" type="password" class="w-full px-3 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-white outline-none focus:border-violet-500" minlength="6" required placeholder="Mínimo 6 caracteres">
+          </div>
+          <div v-if="passwordError" class="text-red-400 text-[13px] bg-red-500/10 p-2 rounded">{{ passwordError }}</div>
+          <div v-if="passwordSuccess" class="text-green-400 text-[13px] bg-green-500/10 p-2 rounded">Contraseña actualizada con éxito.</div>
+          <div class="flex gap-3 mt-2">
+            <button type="button" @click="showPasswordModal = false" class="flex-1 px-4 py-2 bg-white/[0.05] hover:bg-white/[0.1] text-white/70 rounded-lg transition-colors">Cancelar</button>
+            <button type="submit" class="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors font-medium">Guardar</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 </template>
