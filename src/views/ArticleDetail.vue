@@ -1,13 +1,17 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useArticlesStore } from '@/stores/articles'
 import { useAuthStore } from '@/stores/auth'
 import { getCategoryMeta as catMeta } from '@/constants/categories'
-import { marked } from 'marked'
-import { sanitizeArticleHtml } from '@/utils/markdownMedia'
+import {
+  getArticlePages,
+  renderMarkdownContent,
+  buildTocEntries,
+} from '@/utils/articlePages'
 import { exportArticleToPdf } from '@/utils/exportArticlePdf'
 import AppHeader from '@/components/AppHeader.vue'
+import ArticleTocSidebar from '@/components/ArticleTocSidebar.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 
@@ -21,9 +25,32 @@ const notFound   = ref(false)
 const deleting   = ref(false)
 const showDelete = ref(false)
 const downloadingPdf = ref(false)
+const activePageId = ref(null)
+const mobileTocOpen = ref(false)
 
-// Comprueba si el usuario tiene permisos de edición (Administrador)
 const canEdit = computed(() => auth.isAdmin)
+
+const pages = computed(() => article.value ? getArticlePages(article.value) : [])
+
+const activePage = computed(() =>
+  pages.value.find(p => p.id === activePageId.value) ?? pages.value[0]
+)
+
+const toc = computed(() =>
+  activePageId.value ? buildTocEntries(pages.value, activePageId.value) : { pages: [], headings: [], hasMultiplePages: false }
+)
+
+const renderedContent = computed(() =>
+  renderMarkdownContent(activePage.value?.content)
+)
+
+const currentPageIndex = computed(() =>
+  pages.value.findIndex(p => p.id === activePageId.value)
+)
+
+watch(article, (a) => {
+  if (a) activePageId.value = getArticlePages(a)[0]?.id ?? null
+})
 
 function formatDate(ts) {
   if (!ts) return ''
@@ -31,11 +58,28 @@ function formatDate(ts) {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-const renderedContent = computed(() => {
-  if (!article.value?.content) return ''
-  const rawHtml = marked.parse(article.value.content)
-  return sanitizeArticleHtml(rawHtml)
-})
+function selectPage(id) {
+  activePageId.value = id
+  mobileTocOpen.value = false
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function scrollToHeading(id) {
+  mobileTocOpen.value = false
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function prevPage() {
+  if (currentPageIndex.value > 0) {
+    selectPage(pages.value[currentPageIndex.value - 1].id)
+  }
+}
+
+function nextPage() {
+  if (currentPageIndex.value < pages.value.length - 1) {
+    selectPage(pages.value[currentPageIndex.value + 1].id)
+  }
+}
 
 onMounted(async () => {
   try {
@@ -63,7 +107,7 @@ async function downloadPdf() {
   downloadingPdf.value = true
   try {
     const meta = catMeta(article.value.category)
-    await exportArticleToPdf(article.value, renderedContent.value, {
+    await exportArticleToPdf(article.value, {
       formatDate,
       categoryLabel: `${meta.icon} ${article.value.category}`,
     })
@@ -80,7 +124,6 @@ async function downloadPdf() {
 
     <AppHeader back-label="Volver" back-to="/" />
 
-    <!-- ── Loading ── -->
     <div v-if="loading" class="flex items-center justify-center py-40">
       <svg class="w-8 h-8 animate-spin text-violet-500" viewBox="0 0 24 24" fill="none">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -88,7 +131,6 @@ async function downloadPdf() {
       </svg>
     </div>
 
-    <!-- ── Not found ── -->
     <div v-else-if="notFound" class="flex flex-col items-center justify-center py-40 gap-4 text-center px-4">
       <span class="text-6xl">😕</span>
       <h2 class="text-xl font-bold text-white">Artículo no encontrado</h2>
@@ -99,30 +141,26 @@ async function downloadPdf() {
       >Ir al inicio</button>
     </div>
 
-    <!-- ── Artículo ── -->
     <template v-else-if="article">
-      <!-- Hero del artículo -->
+      <!-- Hero -->
       <div class="border-b border-white/[0.06]" :style="{ background: `linear-gradient(160deg, ${catMeta(article.category).color}15 0%, transparent 60%)` }">
-        <div class="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-
-          <!-- Meta superior -->
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
           <div class="flex flex-wrap items-center gap-2 mb-5">
             <span class="text-[12px] font-bold border rounded-full px-2.5 py-1" :class="catMeta(article.category).bg">
               {{ catMeta(article.category).icon }} {{ article.category }}
             </span>
             <span class="text-white/30 text-xs">·</span>
             <span class="text-white/40 text-xs">{{ formatDate(article.createdAt) }}</span>
+            <span v-if="toc.hasMultiplePages" class="text-white/30 text-xs">·</span>
+            <span v-if="toc.hasMultiplePages" class="text-white/40 text-xs">{{ pages.length }} páginas</span>
           </div>
 
-          <!-- Título -->
           <h1 class="text-2xl sm:text-4xl font-bold text-white leading-tight tracking-tight mb-4">
             {{ article.title }}
           </h1>
 
-          <!-- Excerpt -->
           <p class="text-white/55 text-base sm:text-lg leading-relaxed mb-6">{{ article.excerpt }}</p>
 
-          <!-- Autor + acciones -->
           <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-3">
               <div
@@ -135,7 +173,6 @@ async function downloadPdf() {
               </div>
             </div>
 
-            <!-- Acciones -->
             <div class="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
@@ -179,27 +216,113 @@ async function downloadPdf() {
         </div>
       </div>
 
-      <!-- Contenido -->
-      <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        <div class="prose prose-invert prose-violet max-w-none text-white/80" v-html="renderedContent"></div>
+      <!-- Contenido con sidebar -->
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <div class="flex gap-10 items-start">
 
-        <!-- Tags -->
-        <div v-if="article.tags?.length" class="mt-10 pt-6 border-t border-white/[0.06] flex flex-wrap gap-2">
-          <span
-            v-for="tag in article.tags"
-            :key="tag"
-            class="text-xs text-white/40 bg-white/[0.06] border border-white/[0.07] px-2.5 py-1 rounded-full"
-          >#{{ tag }}</span>
+          <ArticleTocSidebar
+            :pages="toc.pages"
+            :headings="toc.headings"
+            :active-page-id="activePageId"
+            :has-multiple-pages="toc.hasMultiplePages"
+            @select-page="selectPage"
+            @scroll-to="scrollToHeading"
+          />
+
+          <div class="flex-1 min-w-0">
+            <!-- TOC móvil -->
+            <div class="lg:hidden mb-6">
+              <button
+                type="button"
+                class="w-full flex items-center justify-between px-4 py-3 bg-white/[0.06] border border-white/10 rounded-xl text-sm text-white/70"
+                @click="mobileTocOpen = !mobileTocOpen"
+              >
+                <span>Índice · {{ activePage?.title || 'Contenido' }}</span>
+                <svg class="w-4 h-4 transition-transform" :class="mobileTocOpen && 'rotate-180'" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+                </svg>
+              </button>
+              <div v-if="mobileTocOpen" class="mt-2 p-3 bg-white/[0.04] border border-white/10 rounded-xl space-y-3">
+                <div v-if="toc.hasMultiplePages">
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-1.5 px-1">Páginas</p>
+                  <button
+                    v-for="page in toc.pages"
+                    :key="page.id"
+                    type="button"
+                    class="block w-full text-left px-2 py-1.5 rounded-lg text-sm"
+                    :class="page.id === activePageId ? 'bg-violet-500/15 text-violet-300' : 'text-white/50'"
+                    @click="selectPage(page.id)"
+                  >{{ page.title }}</button>
+                </div>
+                <div v-if="toc.headings.length">
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-1.5 px-1">Títulos</p>
+                  <button
+                    v-for="heading in toc.headings"
+                    :key="heading.id"
+                    type="button"
+                    class="block w-full text-left py-1 text-sm text-white/45"
+                    :class="heading.level === 3 ? 'pl-5' : 'pl-2'"
+                    @click="scrollToHeading(heading.id)"
+                  >{{ heading.text }}</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Título de página -->
+            <div v-if="toc.hasMultiplePages && activePage" class="mb-6 pb-4 border-b border-white/[0.06]">
+              <p class="text-xs text-white/35 mb-1">Página {{ currentPageIndex + 1 }} de {{ pages.length }}</p>
+              <h2 class="text-xl sm:text-2xl font-bold text-white">{{ activePage.title }}</h2>
+            </div>
+
+            <!-- Cuerpo -->
+            <div class="prose prose-invert prose-violet max-w-none text-white/80 article-content" v-html="renderedContent"></div>
+
+            <!-- Navegación entre páginas -->
+            <div v-if="toc.hasMultiplePages" class="mt-10 pt-6 border-t border-white/[0.06] flex items-center justify-between gap-4">
+              <button
+                type="button"
+                class="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                :class="currentPageIndex > 0
+                  ? 'border-white/10 text-white/60 hover:bg-white/[0.06]'
+                  : 'border-transparent text-white/20'"
+                :disabled="currentPageIndex <= 0"
+                @click="prevPage"
+              >
+                <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.78 5.22a.75.75 0 010 1.06L8.06 10l3.72 3.72a.75.75 0 11-1.06 1.06l-4.25-4.25a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 0z" clip-rule="evenodd"/></svg>
+                Anterior
+              </button>
+              <span class="text-xs text-white/30">{{ currentPageIndex + 1 }} / {{ pages.length }}</span>
+              <button
+                type="button"
+                class="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                :class="currentPageIndex < pages.length - 1
+                  ? 'border-white/10 text-white/60 hover:bg-white/[0.06]'
+                  : 'border-transparent text-white/20'"
+                :disabled="currentPageIndex >= pages.length - 1"
+                @click="nextPage"
+              >
+                Siguiente
+                <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.22 5.22a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+              </button>
+            </div>
+
+            <!-- Tags -->
+            <div v-if="article.tags?.length" class="mt-10 pt-6 border-t border-white/[0.06] flex flex-wrap gap-2">
+              <span
+                v-for="tag in article.tags"
+                :key="tag"
+                class="text-xs text-white/40 bg-white/[0.06] border border-white/[0.07] px-2.5 py-1 rounded-full"
+              >#{{ tag }}</span>
+            </div>
+
+            <p v-if="article.updatedAt" class="mt-4 text-xs text-white/25">
+              Última actualización: {{ formatDate(article.updatedAt) }}
+            </p>
+          </div>
         </div>
-
-        <!-- Última actualización -->
-        <p v-if="article.updatedAt" class="mt-4 text-xs text-white/25">
-          Última actualización: {{ formatDate(article.updatedAt) }}
-        </p>
       </div>
     </template>
 
-    <!-- ── Modal de confirmación de borrado ── -->
     <Transition
       enter-active-class="transition-opacity duration-200"
       enter-from-class="opacity-0"
@@ -231,3 +354,11 @@ async function downloadPdf() {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+.article-content :deep(h2),
+.article-content :deep(h3),
+.article-content :deep(h4) {
+  scroll-margin-top: 5rem;
+}
+</style>

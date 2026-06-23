@@ -3,9 +3,10 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useArticlesStore } from '@/stores/articles'
 import { markdownSnippetForUpload } from '@/utils/markdownMedia'
+import { getArticlePages, createPage } from '@/utils/articlePages'
 import { CATEGORIES } from '@/constants/categories'
 import AppHeader from '@/components/AppHeader.vue'
-import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import ArticlePagesEditor from '@/components/ArticlePagesEditor.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -13,13 +14,12 @@ const store  = useArticlesStore()
 
 const id = route.params.id
 
-// ── Formulario ────────────────────────────────────────────────────────────────
 const form = ref({
   title:    '',
   excerpt:  '',
-  content:  '',
   category: '',
   tags:     '',
+  pages:    [createPage('Página 1')],
 })
 
 const errors     = ref({})
@@ -32,21 +32,32 @@ const tagPreview = computed(() =>
 )
 
 const fileInput = ref(null)
+const uploadTargetPageId = ref(null)
 const uploadingFile = ref(false)
+
+function openFileUpload(pageId) {
+  uploadTargetPageId.value = pageId
+  fileInput.value?.click()
+}
 
 async function handleFileUpload(event) {
   const file = event.target.files[0]
-  if (!file) return
-  
+  if (!file || !uploadTargetPageId.value) return
+
   uploadingFile.value = true
   try {
     const url = await store.uploadFile(file)
-    form.value.content += markdownSnippetForUpload(file, url)
+    const snippet = markdownSnippetForUpload(file, url)
+    form.value.pages = form.value.pages.map(p =>
+      p.id === uploadTargetPageId.value
+        ? { ...p, content: p.content + snippet }
+        : p
+    )
   } catch (e) {
     console.error(e)
   } finally {
     uploadingFile.value = false
-    event.target.value = '' // resetea el input
+    event.target.value = ''
   }
 }
 
@@ -56,29 +67,29 @@ onMounted(async () => {
     form.value = {
       title:    article.title || '',
       excerpt:  article.excerpt || '',
-      content:  article.content || '',
       category: article.category || '',
-      tags:     article.tags ? article.tags.join(', ') : ''
+      tags:     article.tags ? article.tags.join(', ') : '',
+      pages:    getArticlePages(article),
     }
-  } catch (e) {
+  } catch {
     notFound.value = true
   } finally {
     loading.value = false
   }
 })
 
-// ── Validación ────────────────────────────────────────────────────────────────
 function validate() {
   const e = {}
-  if (!form.value.title.trim())    e.title    = 'El título es obligatorio.'
-  if (!form.value.excerpt.trim())  e.excerpt  = 'El resumen es obligatorio.'
-  if (!form.value.content.trim())  e.content  = 'El contenido no puede estar vacío.'
-  if (!form.value.category)        e.category = 'Selecciona una categoría.'
+  if (!form.value.title.trim())   e.title    = 'El título es obligatorio.'
+  if (!form.value.excerpt.trim()) e.excerpt  = 'El resumen es obligatorio.'
+  if (!form.value.category)       e.category = 'Selecciona una categoría.'
+  if (!form.value.pages.some(p => p.content.trim())) {
+    e.content = 'Al menos una página debe tener contenido.'
+  }
   errors.value = e
   return Object.keys(e).length === 0
 }
 
-// ── Submit ────────────────────────────────────────────────────────────────────
 async function handleSubmit() {
   if (!validate() || saving.value) return
   saving.value = true
@@ -100,7 +111,6 @@ async function handleSubmit() {
   <div class="min-h-[100dvh] bg-[#0a0a12] text-slate-200 font-sans">
     <AppHeader back-label="Cancelar" :back-to="`/articulo/${id}`" />
 
-    <!-- Contenido -->
     <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
       <div v-if="loading" class="flex items-center justify-center py-20">
         <svg class="w-8 h-8 animate-spin text-violet-500" viewBox="0 0 24 24" fill="none">
@@ -108,7 +118,7 @@ async function handleSubmit() {
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
         </svg>
       </div>
-      
+
       <div v-else-if="notFound" class="flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
         <span class="text-6xl">😕</span>
         <h2 class="text-xl font-bold text-white">Artículo no encontrado</h2>
@@ -117,7 +127,7 @@ async function handleSubmit() {
           @click="router.push('/')"
         >Ir al inicio</button>
       </div>
-      
+
       <div v-else>
         <div class="mb-8">
           <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Editar Artículo</h1>
@@ -152,12 +162,11 @@ async function handleSubmit() {
             <span v-if="errors.excerpt" class="text-red-400 text-xs">{{ errors.excerpt }}</span>
           </div>
 
-          <MarkdownEditor
-            v-model="form.content"
-            placeholder="Escribe el contenido de tu artículo aquí. ¡Soporta Markdown (## Títulos, **negritas**, *cursivas*, - listas)!..."
+          <ArticlePagesEditor
+            v-model="form.pages"
             :error="errors.content"
             :uploading-file="uploadingFile"
-            @upload-file="$refs.fileInput.click()"
+            @upload-file="openFileUpload"
           />
           <input type="file" ref="fileInput" class="hidden" accept="image/*,video/*,.pdf,.doc,.docx" @change="handleFileUpload" />
 

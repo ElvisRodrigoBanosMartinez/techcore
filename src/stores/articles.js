@@ -12,6 +12,7 @@ import {
 import { db } from '@/firebase/config'
 import { useAuthStore } from '@/stores/auth'
 import { getCloudinaryResourceType } from '@/utils/markdownMedia'
+import { computeReadTime, pagesToPlainText } from '@/utils/articlePages'
 
 const COLLECTION = 'articles'
 
@@ -116,17 +117,21 @@ export const useArticlesStore = defineStore('articles', () => {
     const auth = useAuthStore()
     error.value = null
     try {
-      // Calcular tiempo de lectura estimado
-      const wordCount = payload.content.trim().split(/\s+/).length
-      const readTime = `${Math.max(1, Math.ceil(wordCount / 200))} min lectura`
+      const pages = payload.pages.map(p => ({
+        id:      p.id,
+        title:   p.title.trim() || 'Página',
+        content: p.content.trim(),
+      }))
+      const content = pagesToPlainText(pages)
 
       const docRef = await addDoc(collection(db, COLLECTION), {
         title:     payload.title.trim(),
         excerpt:   payload.excerpt.trim(),
-        content:   payload.content.trim(),
+        content,
+        pages,
         category:  payload.category,
         tags:      payload.tags.map(t => t.trim().toLowerCase()).filter(Boolean),
-        readTime,
+        readTime:  computeReadTime(pages),
         author: {
           uid:         auth.user.uid,
           displayName: auth.user.displayName || auth.user.email.split('@')[0],
@@ -145,16 +150,25 @@ export const useArticlesStore = defineStore('articles', () => {
   async function updateArticle(id, payload) {
     error.value = null
     try {
-      // Recalcular tiempo de lectura si se actualizó el contenido
       const updates = {
-        ...payload,
+        title:     payload.title.trim(),
+        excerpt:   payload.excerpt.trim(),
+        category:  payload.category,
         tags:      payload.tags?.map(t => t.trim().toLowerCase()).filter(Boolean),
         updatedAt: serverTimestamp(),
       }
-      if (payload.content) {
-        const wordCount = payload.content.trim().split(/\s+/).length
-        updates.readTime = `${Math.max(1, Math.ceil(wordCount / 200))} min lectura`
+
+      if (payload.pages) {
+        const pages = payload.pages.map(p => ({
+          id:      p.id,
+          title:   p.title.trim() || 'Página',
+          content: p.content.trim(),
+        }))
+        updates.pages = pages
+        updates.content = pagesToPlainText(pages)
+        updates.readTime = computeReadTime(pages)
       }
+
       await updateDoc(doc(db, COLLECTION, id), updates)
     } catch (e) {
       error.value = 'No se pudo actualizar el artículo.'

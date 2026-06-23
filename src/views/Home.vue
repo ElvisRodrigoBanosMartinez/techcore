@@ -79,6 +79,7 @@ const filteredArticles = computed(() => {
   if (q) list = list.filter(a =>
     normalize(a.title).includes(q) ||
     normalize(a.excerpt).includes(q) ||
+    normalize(a.content).includes(q) ||
     a.tags?.some(t => normalize(t).includes(q)) ||
     normalize(a.category).includes(q) ||
     normalize(a.author?.displayName).includes(q)

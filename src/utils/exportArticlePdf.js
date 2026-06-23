@@ -1,3 +1,5 @@
+import { getArticlePages, renderMarkdownContent } from '@/utils/articlePages'
+
 function slugify(text) {
   return (text || 'articulo')
     .toLowerCase()
@@ -124,7 +126,21 @@ function buildPdfContainer(article, contentHtml, { formatDate, categoryLabel }) 
   return container
 }
 
-export async function exportArticleToPdf(article, contentHtml, { formatDate, categoryLabel }) {
+function buildArticleContentHtml(article) {
+  const pages = getArticlePages(article)
+  return pages.map((page, index) => {
+    const pageBody = renderMarkdownContent(page.content)
+    if (pages.length <= 1) return pageBody
+    const divider = index > 0
+      ? '<div style="margin-top:32px;padding-top:8px;border-top:2px solid #e2e8f0;"></div>'
+      : ''
+    const title = `<h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:24px 0 16px;">${escapeHtml(page.title)}</h2>`
+    return `${divider}${title}${pageBody}`
+  }).join('')
+}
+
+export async function exportArticleToPdf(article, { formatDate, categoryLabel }) {
+  const contentHtml = buildArticleContentHtml(article)
   const container = buildPdfContainer(article, contentHtml, { formatDate, categoryLabel })
 
   // Wrapper fuera de vista; el contenedor exportado no lleva opacity/position que html2pdf clonaría.

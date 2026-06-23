@@ -3,20 +3,20 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useArticlesStore } from '@/stores/articles'
 import { markdownSnippetForUpload } from '@/utils/markdownMedia'
+import { createPage } from '@/utils/articlePages'
 import { CATEGORIES } from '@/constants/categories'
 import AppHeader from '@/components/AppHeader.vue'
-import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import ArticlePagesEditor from '@/components/ArticlePagesEditor.vue'
 
 const router   = useRouter()
 const store    = useArticlesStore()
 
-// ── Formulario ────────────────────────────────────────────────────────────────
 const form = ref({
   title:    '',
   excerpt:  '',
-  content:  '',
   category: '',
   tags:     '',
+  pages:    [createPage('Página 1')],
 })
 
 const errors      = ref({})
@@ -26,36 +26,47 @@ const tagPreview  = computed(() =>
 )
 
 const fileInput = ref(null)
+const uploadTargetPageId = ref(null)
 const uploadingFile = ref(false)
+
+function openFileUpload(pageId) {
+  uploadTargetPageId.value = pageId
+  fileInput.value?.click()
+}
 
 async function handleFileUpload(event) {
   const file = event.target.files[0]
-  if (!file) return
-  
+  if (!file || !uploadTargetPageId.value) return
+
   uploadingFile.value = true
   try {
     const url = await store.uploadFile(file)
-    form.value.content += markdownSnippetForUpload(file, url)
+    const snippet = markdownSnippetForUpload(file, url)
+    form.value.pages = form.value.pages.map(p =>
+      p.id === uploadTargetPageId.value
+        ? { ...p, content: p.content + snippet }
+        : p
+    )
   } catch (e) {
     console.error(e)
   } finally {
     uploadingFile.value = false
-    event.target.value = '' // resetea el input
+    event.target.value = ''
   }
 }
 
-// ── Validación ────────────────────────────────────────────────────────────────
 function validate() {
   const e = {}
-  if (!form.value.title.trim())    e.title    = 'El título es obligatorio.'
-  if (!form.value.excerpt.trim())  e.excerpt  = 'El resumen es obligatorio.'
-  if (!form.value.content.trim())  e.content  = 'El contenido no puede estar vacío.'
-  if (!form.value.category)        e.category = 'Selecciona una categoría.'
+  if (!form.value.title.trim())   e.title    = 'El título es obligatorio.'
+  if (!form.value.excerpt.trim()) e.excerpt  = 'El resumen es obligatorio.'
+  if (!form.value.category)       e.category = 'Selecciona una categoría.'
+  if (!form.value.pages.some(p => p.content.trim())) {
+    e.content = 'Al menos una página debe tener contenido.'
+  }
   errors.value = e
   return Object.keys(e).length === 0
 }
 
-// ── Submit ────────────────────────────────────────────────────────────────────
 async function handleSubmit() {
   if (!validate() || saving.value) return
   saving.value = true
@@ -78,16 +89,13 @@ async function handleSubmit() {
 
     <AppHeader back-label="Volver" back-to="/" />
 
-    <!-- Contenido -->
     <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
-      <!-- Encabezado -->
       <div class="mb-8">
         <h1 class="text-2xl sm:text-3xl font-bold text-white tracking-tight">Nuevo Artículo</h1>
         <p class="text-white/45 text-sm mt-1">Comparte conocimiento con tu equipo de Recursos Humanos</p>
       </div>
 
-      <!-- Alerta de error global -->
       <div v-if="store.error" class="mb-6 flex items-center gap-2.5 bg-red-500/15 border border-red-500/30 rounded-xl px-4 py-3 text-red-300 text-sm">
         <svg class="w-4 h-4 flex-none" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
@@ -95,10 +103,8 @@ async function handleSubmit() {
         {{ store.error }}
       </div>
 
-      <!-- Formulario -->
       <form id="article-form" class="flex flex-col gap-6" @submit.prevent="handleSubmit" novalidate>
 
-        <!-- Título -->
         <div class="flex flex-col gap-1.5">
           <label for="art-title" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Título *</label>
           <input
@@ -112,7 +118,6 @@ async function handleSubmit() {
           <span v-if="errors.title" class="text-red-400 text-xs">{{ errors.title }}</span>
         </div>
 
-        <!-- Categoría -->
         <div class="flex flex-col gap-1.5">
           <label class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Categoría *</label>
           <div class="flex flex-wrap gap-2">
@@ -130,7 +135,6 @@ async function handleSubmit() {
           <span v-if="errors.category" class="text-red-400 text-xs">{{ errors.category }}</span>
         </div>
 
-        <!-- Resumen -->
         <div class="flex flex-col gap-1.5">
           <label for="art-excerpt" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Resumen *</label>
           <textarea
@@ -144,17 +148,14 @@ async function handleSubmit() {
           <span v-if="errors.excerpt" class="text-red-400 text-xs">{{ errors.excerpt }}</span>
         </div>
 
-        <!-- Contenido (Markdown Editor con Preview) -->
-        <MarkdownEditor
-          v-model="form.content"
-          placeholder="Escribe el contenido de tu artículo aquí. ¡Soporta Markdown (## Títulos, **negritas**, *cursivas*, - listas)!..."
+        <ArticlePagesEditor
+          v-model="form.pages"
           :error="errors.content"
           :uploading-file="uploadingFile"
-          @upload-file="$refs.fileInput.click()"
+          @upload-file="openFileUpload"
         />
         <input type="file" ref="fileInput" class="hidden" accept="image/*,video/*,.pdf,.doc,.docx" @change="handleFileUpload" />
 
-        <!-- Tags -->
         <div class="flex flex-col gap-1.5">
           <label for="art-tags" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">
             Etiquetas <span class="normal-case font-normal">(separadas por coma)</span>
@@ -166,7 +167,6 @@ async function handleSubmit() {
             placeholder="onboarding, proceso, RRHH"
             class="w-full px-4 py-3 bg-white/[0.06] border border-white/10 rounded-xl text-white placeholder-white/25 text-sm outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/15 transition-all"
           />
-          <!-- Preview de tags -->
           <div v-if="tagPreview.length" class="flex flex-wrap gap-1.5 mt-1">
             <span
               v-for="tag in tagPreview"
@@ -176,10 +176,8 @@ async function handleSubmit() {
           </div>
         </div>
 
-        <!-- Divisor -->
         <div class="border-t border-white/[0.06]"></div>
 
-        <!-- Acciones -->
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <button
             id="btn-submit-article"
