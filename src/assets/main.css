@@ -17,4 +17,8 @@
   }
 
   input[type='search']::-webkit-search-cancel-button { display: none; }
+
+  .prose video {
+    @apply w-full rounded-xl my-4;
+  }
 }

@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useArticlesStore } from '@/stores/articles'
+import { markdownSnippetForUpload } from '@/utils/markdownMedia'
 import { CATEGORIES } from '@/constants/categories'
 import AppHeader from '@/components/AppHeader.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
@@ -40,12 +41,7 @@ async function handleFileUpload(event) {
   uploadingFile.value = true
   try {
     const url = await store.uploadFile(file)
-    const isImage = file.type.startsWith('image/')
-    const markdownSnippet = isImage 
-      ? `\n![${file.name}](${url})\n` 
-      : `\n[📄 Descargar ${file.name}](${url})\n`
-      
-    form.value.content += markdownSnippet
+    form.value.content += markdownSnippetForUpload(file, url)
   } catch (e) {
     console.error(e)
   } finally {
@@ -163,7 +159,7 @@ async function handleSubmit() {
             :uploading-file="uploadingFile"
             @upload-file="$refs.fileInput.click()"
           />
-          <input type="file" ref="fileInput" class="hidden" @change="handleFileUpload" />
+          <input type="file" ref="fileInput" class="hidden" accept="image/*,video/*,.pdf,.doc,.docx" @change="handleFileUpload" />
 
           <div class="flex flex-col gap-1.5">
             <label for="art-tags" class="text-[13px] font-semibold text-white/60 uppercase tracking-wide">Etiquetas <span class="normal-case font-normal">(separadas por coma)</span></label>

@@ -7,7 +7,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { sanitizeArticleHtml } from '@/utils/markdownMedia'
 
 const props = defineProps({
   modelValue:    { type: String, default: '' },
@@ -23,7 +23,7 @@ const activeTab = ref('write') // 'write' | 'preview'
 const renderedPreview = computed(() => {
   if (!props.modelValue) return '<p class="text-white/30 italic">Nada que previsualizar aún...</p>'
   const rawHtml = marked.parse(props.modelValue)
-  return DOMPurify.sanitize(rawHtml)
+  return sanitizeArticleHtml(rawHtml)
 })
 
 const wordCount = computed(() => {

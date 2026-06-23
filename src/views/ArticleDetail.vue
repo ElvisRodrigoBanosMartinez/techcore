@@ -5,7 +5,7 @@ import { useArticlesStore } from '@/stores/articles'
 import { useAuthStore } from '@/stores/auth'
 import { getCategoryMeta as catMeta } from '@/constants/categories'
 import { marked } from 'marked'
-import DOMPurify from 'dompurify'
+import { sanitizeArticleHtml } from '@/utils/markdownMedia'
 import AppHeader from '@/components/AppHeader.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -29,36 +29,10 @@ function formatDate(ts) {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-// Renderiza Markdown de forma segura a HTML (permite videos embebidos)
-// Dominios de confianza para embeds de video
-const TRUSTED_IFRAME_HOSTS = [
-  'www.youtube.com',
-  'youtube.com',
-  'www.youtube-nocookie.com',
-  'player.vimeo.com',
-]
-
-// Hook de DOMPurify: elimina iframes cuyo src no sea de un dominio de confianza
-DOMPurify.addHook('uponSanitizeElement', (node) => {
-  if (node.tagName === 'IFRAME') {
-    try {
-      const src = new URL(node.getAttribute('src') || '')
-      if (!TRUSTED_IFRAME_HOSTS.includes(src.hostname)) {
-        node.remove()
-      }
-    } catch {
-      node.remove() // URL inválida → eliminar
-    }
-  }
-})
-
 const renderedContent = computed(() => {
   if (!article.value?.content) return ''
   const rawHtml = marked.parse(article.value.content)
-  return DOMPurify.sanitize(rawHtml, {
-    ADD_TAGS: ['iframe'],
-    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'src']
-  })
+  return sanitizeArticleHtml(rawHtml)
 })
 
 onMounted(async () => {

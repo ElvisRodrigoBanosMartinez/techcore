@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/firebase/config'
 import { useAuthStore } from '@/stores/auth'
+import { getCloudinaryResourceType } from '@/utils/markdownMedia'
 
 const COLLECTION = 'articles'
 
@@ -186,9 +187,7 @@ export const useArticlesStore = defineStore('articles', () => {
       formData.append('file', file)
       formData.append('upload_preset', uploadPreset)
 
-      // Si es imagen lo mandamos a 'image', si es documento (PDF, etc) a 'raw'
-      // Esto evita que Cloudinary intente procesar el PDF y dé error al intentar verlo.
-      const resourceType = file.type.startsWith('image/') ? 'image' : 'raw'
+      const resourceType = getCloudinaryResourceType(file)
 
       const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
         method: 'POST',
