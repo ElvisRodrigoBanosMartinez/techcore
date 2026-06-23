@@ -103,7 +103,7 @@ onMounted(() => {
             </button>
           </form>
 
-          <h3 class="text-sm font-semibold text-white/60 uppercase mb-2">Administradores Actuales (Firestore)</h3>
+          <h3 class="text-sm font-semibold text-white/60 uppercase mb-2">Administradores Actuales</h3>
           <ul class="text-sm text-white/80 space-y-1">
             <li v-for="r in adminStore.roles.filter(x => x.isAdmin)" :key="r.email" class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-green-500"></span>
