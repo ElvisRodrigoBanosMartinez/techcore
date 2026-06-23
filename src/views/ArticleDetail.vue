@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getCategoryMeta as catMeta } from '@/constants/categories'
 import { marked } from 'marked'
 import { sanitizeArticleHtml } from '@/utils/markdownMedia'
+import { exportArticleToPdf } from '@/utils/exportArticlePdf'
 import AppHeader from '@/components/AppHeader.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -19,6 +20,7 @@ const loading    = ref(true)
 const notFound   = ref(false)
 const deleting   = ref(false)
 const showDelete = ref(false)
+const downloadingPdf = ref(false)
 
 // Comprueba si el usuario tiene permisos de edición (Administrador)
 const canEdit = computed(() => auth.isAdmin)
@@ -53,6 +55,22 @@ async function confirmDelete() {
   } catch {
     deleting.value = false
     showDelete.value = false
+  }
+}
+
+async function downloadPdf() {
+  if (!article.value || downloadingPdf.value) return
+  downloadingPdf.value = true
+  try {
+    const meta = catMeta(article.value.category)
+    await exportArticleToPdf(article.value, renderedContent.value, {
+      formatDate,
+      categoryLabel: `${meta.icon} ${article.value.category}`,
+    })
+  } catch (e) {
+    console.error('[PDF Error]', e)
+  } finally {
+    downloadingPdf.value = false
   }
 }
 </script>
@@ -117,9 +135,26 @@ async function confirmDelete() {
               </div>
             </div>
 
-            <!-- Acciones de administración -->
-            <div v-if="canEdit" class="flex items-center gap-2">
+            <!-- Acciones -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.07] border border-white/10 text-white/60 text-sm font-medium rounded-lg hover:bg-white/[0.12] hover:text-white transition-colors disabled:opacity-50"
+                :disabled="downloadingPdf"
+                @click="downloadPdf"
+              >
+                <svg v-if="downloadingPdf" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+                <svg v-else class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z"/>
+                  <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z"/>
+                </svg>
+                {{ downloadingPdf ? 'Generando...' : 'Descargar PDF' }}
+              </button>
               <RouterLink
+                v-if="canEdit"
                 :to="`/articulo/${id}/editar`"
                 class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.07] border border-white/10 text-white/60 text-sm font-medium rounded-lg hover:bg-white/[0.12] hover:text-white transition-colors no-underline"
               >
@@ -130,6 +165,7 @@ async function confirmDelete() {
                 Editar
               </RouterLink>
               <button
+                v-if="canEdit"
                 class="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border border-red-500/25 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/20 transition-colors"
                 @click="showDelete = true"
               >
